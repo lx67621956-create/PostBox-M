@@ -37,7 +37,7 @@ postbox new --to bob --title "weekly report" \
 postbox init --transport rclone --remote gdrive:team/inbox --agent bob
 postbox inbox
 postbox ack 20261102-1806-alice-to-bob-01 --note "on it, 6pm"
-postbox result 20261102-1806-alice-to-bob-01 --verified --file weekly.md
+postbox result 20261102-1806-alice-to-bob-01 --artifact weekly.md --verified
 
 # machine A
 postbox inbox     # replies on tasks you sent →
@@ -61,7 +61,7 @@ postbox init --transport local --path /path/to/shared-folder --agent alice
 | `ls` / `show` | list / one task with its full event history |
 | `ack` | claim (3 = already claimed, 5 = needs approval) |
 | `note` | progress, no state change |
-| `result` | deliver (under 20 characters is rejected) |
+| `result` | deliver: `--artifact <file>` (repeatable) builds the manifest, or `--no-artifact "<reason>"` |
 | `blocked` | report a blocker and who you are asking |
 | `owner-ok` / `owner-no` | record the human decision |
 | `status` | refresh `STATUS_<agent>.md` heartbeat |
@@ -104,6 +104,8 @@ Long file names are the wire format. The upside is that a human can read, fix an
 **Pollers must be byte-stable.** `postbox watch` prints exactly the same bytes until something changes. On failure it replays the last baseline plus a constant `STATUS|DEGRADED|…` line — no timestamps, or every tick would look new and wake the model forever. Two consecutive failures are required before that line appears, and it disappears on recovery: one wake-up per outage.
 
 **Idempotency lives above the transport.** `create` treats an existing name as a conflict and does not guess. Whether a conflict is "my own retry" is decided by the application using an `instance: <pid>-<host>` field in the front matter. Pushing idempotency down into `create` makes every concurrent claim "succeed".
+
+**A fingerprint without a hash is a guess.** Name + size + mtime misses a file edited in place to the same length within the same second — and it misses it silently, which is the worst kind. The watch line carries an md5 (`rclone` gets it from Drive's own `md5Checksum`, no extra request). When the backend cannot supply a hash the line ends in `-` and one `HASH|missing|<n>` line appears, because a degraded fingerprint should look degraded. Same logic applies to delivery: `result` refuses to be a paragraph. `--artifact` writes file, folder, size and sha256 into the RESULT; `--no-artifact "<reason>"` is the only way out. A sentence in a chat is not a deliverable.
 
 ## Limits
 

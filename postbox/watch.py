@@ -91,13 +91,20 @@ def fingerprint(lines: List[str]) -> str:
     return digest[:16]
 
 
-def collect(transport: Transport, paths: List[str]) -> Tuple[Optional[List[str]], str]:
-    """Return (lines, error). One list call per watched path, never recursive."""
+def collect(transport: Transport, paths: List[str], self_agent: str = "",
+            prefix: str = "") -> Tuple[Optional[List[str]], str]:
+    """Return (lines, error). One list call per watched path, never recursive.
+
+    Lines carry an md5 (v1.1): same name, same size, changed bytes must still be
+    a change. Our own STATUS file is frozen to `<name>|self` so the heartbeat
+    we write every hour does not wake us up.
+    """
     lines: List[str] = []
+    own = "status_%s.md" % self_agent.lower() if self_agent else ""
     for path in paths or ["."]:
         sub = "" if path in (".", "./", "") else path.strip("/")
         try:
-            files = transport.list(sub)
+            files = transport.list(sub, with_hash=True)
         except FileNotFoundError:
             continue                        # a watch path that is not there yet
         except TransportError as exc:
@@ -108,15 +115,22 @@ def collect(transport: Transport, paths: List[str]) -> Tuple[Optional[List[str]]
             return None, "%s: %s" % (sub or ".", exc)
         for item in files:
             name = item.name if not sub else sub + "/" + item.name
-            lines.append("%s|%d|%s" % (name, item.size, item.mtime))
+            base = name.split("/")[-1]
+            if prefix and not base.startswith(prefix):
+                continue
+            if own and base.lower() == own:
+                lines.append(base + "|self")
+                continue
+            lines.append("%s|%d|%s|%s" % (name, item.size, item.mtime, item.md5 or "-"))
     lines.sort()
     return lines, ""
 
 
 def run(transport: Transport, paths: List[str], state_dir: str,
-        empty_is_error: bool = True) -> Tuple[int, str]:
+        empty_is_error: bool = True, self_agent: str = "",
+        prefix: str = "") -> Tuple[int, str]:
     state = WatchState(state_dir)
-    lines, error = collect(transport, paths)
+    lines, error = collect(transport, paths, self_agent=self_agent, prefix=prefix)
 
     if lines is None:
         return _degraded(state, error or "unknown")
@@ -126,7 +140,11 @@ def run(transport: Transport, paths: List[str], state_dir: str,
 
     state.clear_fails()
     fp = fingerprint(lines)
-    out = [HEADER] + lines + ["FP|" + fp]
+    missing = sum(1 for line in lines if line.endswith("|-"))
+    out = [HEADER]
+    if missing:
+        out.append("HASH|missing|%d" % missing)      # be honest, stay deterministic
+    out += lines + ["FP|" + fp]
 
     previous = state.lines
     if not previous:

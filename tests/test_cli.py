@@ -52,10 +52,15 @@ def test_full_handoff_roundtrip(tmp_path):
     assert "already accepted" in run(roots["bob"], "ack", task_id, expect=3).stderr
     assert "ack" in run(roots["alice"], "ls", "--all").stdout
 
-    result = run(roots["bob"], "result", task_id, "--text",
+    artifact = tmp_path / "weekly.md"
+    artifact.write_text("# weekly\n\n- one\n- two\n", encoding="utf-8")
+    result = run(roots["bob"], "result", task_id, "--artifact", str(artifact), "--text",
                  "Wrote 5 bullets. File: 05_out/weekly.md. Facts cross-checked at source.",
                  expect=0)
     assert "_RESULT_bob.md" in result.stdout
+    delivered = open(os.path.join(shared, result.stdout.strip()), encoding="utf-8").read()
+    assert "| weekly.md |" in delivered
+    assert __import__("hashlib").sha256(artifact.read_bytes()).hexdigest() in delivered
 
     # alice is told, and only once
     inbox = run(roots["alice"], "inbox", expect=0)
@@ -135,7 +140,8 @@ def test_result_must_say_something(tmp_path):
     task_id = run(roots["alice"], "new", "--to", "bob", "--title", "z",
                   "--ask", "do z", expect=0).stdout.split("\t")[0]
     run(roots["bob"], "ack", task_id, expect=0)
-    proc = run(roots["bob"], "result", task_id, "--text", "done", expect=2)
+    proc = run(roots["bob"], "result", task_id, "--text", "done",
+               "--no-artifact", "verbal decision, nothing to attach", expect=2)
     assert "at least 20 chars" in proc.stderr
 
 

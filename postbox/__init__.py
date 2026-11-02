@@ -6,5 +6,5 @@ rclone, Dropbox, Syncthing, a USB stick) works, because the protocol only ever
 uses "list / read / create-if-absent / replace-own-file".
 """
 
-__version__ = "0.1.0"
-PROTOCOL_VERSION = 1
+__version__ = "0.2.0"
+PROTOCOL_VERSION = "1.1"

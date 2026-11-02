@@ -45,7 +45,7 @@ postbox inbox
 # 20261102-1806-alice-to-bob-01  new    alice  1m   每周复盘
 
 postbox ack 20261102-1806-alice-to-bob-01 --note "收到，18 点前给"
-postbox result 20261102-1806-alice-to-bob-01 --verified --file weekly.md
+postbox result 20261102-1806-alice-to-bob-01 --artifact weekly.md --verified
 ```
 
 ```bash
@@ -66,17 +66,17 @@ postbox init --transport local --path /path/to/shared-folder --agent alice
 | 命令 | 干什么 |
 |---|---|
 | `init` | 建 `.postbox/config.json` 和邮箱目录 |
-| `new` | 发一个任务（`--needs-owner` 表示需要人批准） |
+| `new` | 发一个任务（`--needs-owner` 需要人批准；`--urgent` 走 5 分钟急件通道） |
 | `dispatch tasks.json` | 一次派一批 |
 | `inbox` | 我要干的、等我批准才能干的、我发出去的任务有新回复的 |
 | `ls` / `show` | 列表 / 单任务全貌（含全部事件） |
 | `ack` | 认领。重复认领退出码 3，需要批准但没批准退出码 5 |
 | `note` | 记进度，不改状态 |
-| `result` | 交付。少于 20 个字会被拒（"已完成"不算交付） |
+| `result` | 交付。`--artifact 文件` 自动生成清单（文件夹、文件名、大小、sha256）；没有文件就 `--no-artifact "理由"`。少于 20 个字会被拒 |
 | `blocked` | 卡住了，同时写清在问谁什么 |
 | `owner-ok` / `owner-no` | 人力批准 / 否决 |
-| `status` | 刷新自己的 `STATUS_<agent>.md` 心跳 |
-| `watch` | 哑检查：无变化退出 0，有变化退出 10，掉线退出 11 |
+| `status` | 刷新自己的 `STATUS_<agent>.md`；`--heartbeat` 只动心跳时间 |
+| `watch` | 哑检查：指纹含 md5，无变化退出 0，有变化退出 10，掉线退出 11；`--only-prefix URGENT_` 只看急件 |
 | `lint` | 审查整箱：重复 ID、孤儿回执、双人交付、空交付、僵尸心跳、泄露的密钥 |
 | `doctor` | 这台机器通不通 |
 
@@ -122,7 +122,7 @@ instance: 11528-GothicPC
 
 任务 ID 里带发起方、接收方和时间，事件文件以任务文件名为前缀。好处是可以直接在 Google Drive 手机版里看，也可以用一个编辑器人工补救；坏处是名字长。我选了好补救。
 
-## 四个设计取舍
+## 五个设计取舍
 
 **1. 状态是读出来的，不是写进去的。**
 `state` 字段只在创建时写一次，之后就靠事件文件推导：有 ACK 就是 `ack`，有 RESULT 就是 `done`，有 BLOCKED 就是 `blocked`。没有"更新一下状态行"这个动作，也就不存在两个 Agent 同时改状态行、后写的覆盖先写的问题。
@@ -135,6 +135,9 @@ Google Drive 没有原子 create——实测 `rclone copyto --immutable` 在 Dri
 
 **4. 幂等放在应用层。**
 传输层的 `create` 遇到同名文件就是冲突，不猜。是不是"我自己的重试"由上层判断——事件的 front matter 里带 `instance: <pid>-<host>`，字节完全相同才算自己重试。把幂等塞进 `create` 会让并发抢同一个任务时全部"成功"。
+
+**5. 指纹必须带哈希，交付必须带清单。**
+只比「文件名 + 大小 + 修改时间」会漏掉同一秒内被改成同样长度的文件——这种漏检最阴，因为一切看起来都没变。所以指纹里加 md5；拿不到哈希时输出里会出现 `HASH|missing|n`，宁可难看也不假装。同理，`result` 不允许只说"已完成"：`--artifact` 会把文件、目录、大小、sha256 写成表格，没有文件就必须 `--no-artifact "理由"`。结论写在聊天里、委派摘要里，都不算交付。
 
 ## 边界
 

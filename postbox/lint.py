@@ -97,6 +97,16 @@ def lint(mailbox: Mailbox, sla_hours: int = 48, now=None) -> List[Tuple[str, str
             out.append(("warn", "blocked_no_question",
                         "%s is blocked but nobody was asked a question" % entry.task.task_id))
 
+        # 7b. URGENT_ prefix and priority must agree (v1.1 lane)
+        if entry.task.priority == "urgent" and not entry.task.urgent:
+            out.append(("warn", "urgent_without_prefix",
+                        "%s has priority=urgent but no URGENT_ prefix, so the "
+                        "5-minute lane will never see it" % entry.task.task_id))
+        if entry.task.urgent and entry.task.priority != "urgent":
+            out.append(("warn", "prefix_without_priority",
+                        "%s carries the URGENT_ prefix but priority=%s"
+                        % (entry.task.task_id, entry.task.priority)))
+
     # 8. frozen or missing status files
     statuses = mailbox.statuses()
     if not statuses:
@@ -115,6 +125,17 @@ def lint(mailbox: Mailbox, sla_hours: int = 48, now=None) -> List[Tuple[str, str
             out.append(("error", "zombie_status",
                         "STATUS_%s.md claims %s but has not been refreshed for %s"
                         % (agent, fields.get("state"), _human(age))))
+
+        # v1.1: heartbeat is a separate clock from updated_at
+        if "protocol" not in fields:
+            out.append(("warn", "status_v10",
+                        "STATUS_%s.md has no protocol/heartbeat_at fields (v1.1)" % agent))
+        heartbeat = core.parse_ts(fields.get("heartbeat_at", "")) or updated
+        beat_age = (now - heartbeat).total_seconds() / 60.0
+        if fields.get("state") != "offline" and beat_age > core.HEARTBEAT_STALE_MIN:
+            out.append(("warn", "lost_contact",
+                        "STATUS_%s.md heartbeat is %.0f min old (>%d) — treat as out of contact"
+                        % (agent, beat_age, core.HEARTBEAT_STALE_MIN)))
 
     # 9. secrets anywhere
     for rf in mailbox.files:

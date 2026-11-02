@@ -11,10 +11,10 @@ class Broken(Transport):
         self.inner = inner
         self.down = True
 
-    def list(self, sub="", recursive=False):
+    def list(self, sub="", recursive=False, with_hash=False):
         if self.down:
             raise TransportError("network down")
-        return self.inner.list(sub)
+        return self.inner.list(sub, with_hash=with_hash)
 
     def read(self, name):
         return self.inner.read(name)

@@ -16,8 +16,10 @@ from typing import Dict, List, Optional, Tuple
 MD = ".md"
 _BAD_PATH_CHARS = set('/\\:*?"<>|\t\r\n')
 TASK_RE = re.compile(
-    r"^(?P<date>\d{4}-\d{2}-\d{2})_TASK-(?P<id>[^_]+)_(?P<route>[^_]+)_(?P<title>.+?)" + re.escape(MD) + r"$"
+    r"^(?:(?P<urgent>URGENT)_)?(?P<date>\d{4}-\d{2}-\d{2})_TASK-(?P<id>[^_]+)_(?P<route>[^_]+)_(?P<title>.+?)"
+    + re.escape(MD) + r"$"
 )
+URGENT_PREFIX = "URGENT_"
 ROUTE_SEP_RE = re.compile(r"(-to-)|(给)")
 
 # Event kinds the tool knows how to interpret. Anything else after a task base
@@ -34,6 +36,9 @@ KNOWN_KINDS = {
 
 STATE_ORDER = ["new", "waiting_owner", "ack", "working", "question",
                "blocked", "rejected", "done"]
+
+PROTOCOL_LEVEL = "1.1"      # mirrors the interop supplement agreed on 2026-11-02
+HEARTBEAT_STALE_MIN = 90    # minutes without a heartbeat before "out of contact"
 
 
 # --------------------------------------------------------------------------
@@ -88,9 +93,11 @@ def make_task_id(sender: str, recipient: str, when: datetime, seq: int = 1) -> s
     return "%s-%s-to-%s-%02d" % (when.strftime("%Y%m%d-%H%M"), slug(sender), slug(recipient), int(seq))
 
 
-def task_filename(task_id: str, sender: str, recipient: str, title: str, when: datetime) -> str:
-    return "%s_TASK-%s_%s-to-%s_%s%s" % (
-        when.strftime("%Y-%m-%d"), task_id, slug(sender), slug(recipient), slug(title), MD)
+def task_filename(task_id: str, sender: str, recipient: str, title: str, when: datetime,
+                  urgent: bool = False) -> str:
+    prefix = URGENT_PREFIX if urgent else ""
+    return "%s%s_TASK-%s_%s-to-%s_%s%s" % (
+        prefix, when.strftime("%Y-%m-%d"), task_id, slug(sender), slug(recipient), slug(title), MD)
 
 
 def event_filename(task_filename_: str, kind: str, agent: str, n: Optional[int] = None) -> str:
@@ -161,6 +168,7 @@ class Task:
     sender: str
     recipient: str
     title: str
+    urgent: bool = False
     meta: Dict[str, str] = field(default_factory=dict)
     body: str = ""
     size: int = 0
@@ -195,6 +203,7 @@ class Task:
             sender=meta.get("from") or sender,
             recipient=meta.get("to") or recipient,
             title=m.group("title"),
+            urgent=bool(m.group("urgent")),
             meta=meta,
             body=body,
             size=len(text.encode("utf-8")),
@@ -297,17 +306,46 @@ def render_event(kind: str, agent: str, created_at: str, body: str,
 
 
 def render_status(agent: str, device: str, state: str, current_task: str,
-                  last_seen: str, note: str, updated_at: str) -> str:
+                  last_seen: str, note: str, updated_at: str,
+                  heartbeat_at: str = "", protocol: str = PROTOCOL_LEVEL) -> str:
     return "\n".join([
         "agent: %s" % agent,
+        "protocol: %s" % protocol,
         "device: %s" % (device or "unset"),
         "updated_at: %s" % updated_at,
+        "heartbeat_at: %s" % (heartbeat_at or updated_at),
         "state: %s" % state,
         "current_task: %s" % (current_task or "none"),
         "last_seen: %s" % (last_seen or "none"),
         "note: %s" % (note or "-"),
         "",
     ])
+
+
+def revise_status(text: str, **changes: str) -> str:
+    """Rewrite only the named fields of a STATUS file, keep everything else.
+
+    Used for the v1.1 heartbeat rule: refreshing `heartbeat_at` must not touch
+    `state`, `note` or anything another tool added to the file.
+    """
+    lines = text.replace("\r\n", "\n").split("\n")
+    seen = set()
+    out: List[str] = []
+    for line in lines:
+        if ":" in line and not line.startswith(" "):
+            key = line.split(":", 1)[0].strip()
+            if key in changes:
+                out.append("%s: %s" % (key, changes[key]))
+                seen.add(key)
+                continue
+        out.append(line)
+    for key, value in changes.items():
+        if key not in seen:
+            out.append("%s: %s" % (key, value))
+    while out and not out[-1].strip():
+        out.pop()
+    out.append("")
+    return "\n".join(out)
 
 
 def parse_status(text: str) -> Dict[str, str]:

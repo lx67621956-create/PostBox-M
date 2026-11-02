@@ -164,3 +164,26 @@ now includes the agent name: `~/.cache/postbox/watch-<remote>-<agent>`.
 - **Large mailboxes.** Everything is listed on every command. At thousands of
   files you want partitioning by month — not built, because a real deployment
   plateaus in the low hundreds.
+
+## Problem 8 — a fingerprint without a hash is a guess
+
+The first watch implementation compared `name|size|mtime`. That misses an edit
+made in place when the new bytes are the same length and land inside the same
+mtime tick — which is exactly what happens when a task file is rewritten with a
+one-word change, or when a sync tool preserves mtimes.
+
+The line now carries an md5. On Google Drive that costs nothing extra: `rclone
+lsjson --hash` returns `Hashes.md5` from the metadata the listing already
+fetched. For local folders we read the file; mailboxes are small Markdown files,
+and `watch` reads each one once per tick.
+
+Two rules make the degraded case honest rather than invisible:
+
+- a missing hash renders as `-`, and one `HASH|missing|<n>` line is added to the
+  output, so the fingerprint is visibly weaker;
+- a backend that cannot hash at all still works — the fingerprint just stops
+  catching same-size edits, and the operator can see that in the output.
+
+The same principle, applied to deliverables, is why `result` requires a manifest.
+"Completed" in a chat window has no size and no hash, so there is no way to tell
+it from a task that was never done.

@@ -162,7 +162,8 @@ def cmd_new(args) -> int:
     for attempt in range(1, 20):
         seq = _next_seq(box, when, sender, args.to) + attempt - 1
         task_id = core.make_task_id(sender, args.to, when, seq)
-        name = core.task_filename(task_id, sender, args.to, body_title, when)
+        name = core.task_filename(task_id, sender, args.to, body_title, when,
+                                  urgent=bool(getattr(args, "urgent", False)))
         text = core.render_task(
             task_id=task_id, sender=sender, recipient=args.to, title=body_title,
             ask=ask, background=args.background or "-", done=args.done or "-",
@@ -326,7 +327,7 @@ def _files(box: Mailbox) -> List[str]:
 
 
 def _write_event(cfg: Config, task_id: str, kind: str, body: str, agent: str,
-                 extra: dict, gate: bool = False) -> str:
+                 extra: dict, gate: bool = False, status_state: str = "") -> str:
     instance = "%d-%s" % (os.getpid(), socket.gethostname().split(".")[0][:24])
     box = mailbox(cfg)
     try:
@@ -338,6 +339,10 @@ def _write_event(cfg: Config, task_id: str, kind: str, body: str, agent: str,
     if gate and entry.task.needs_owner and not entry.events_of("OWNER_OK"):
         raise Failure("%s needs owner confirmation first (`postbox owner-ok %s`)"
                       % (task_id, task_id), EXIT_NEEDS_OWNER)
+    if status_state:
+        # v1.1 order rule: STATUS is updated before the RESULT/BLOCKED lands.
+        _write_status(cfg, state=status_state, current=task_id,
+                      note="%s %s" % (kind.lower(), task_id))
     name = _event_name(entry, kind, agent, _files(box))
     text = core.render_event(kind, agent, core.fmt_ts(core.now(cfg.utc_offset_hours)),
                              body, instance=instance, **extra)
@@ -379,14 +384,45 @@ def cmd_note(args) -> int:
     return EXIT_OK
 
 
+def _size_label(n: int) -> str:
+    for unit, size in (("KB", 1024), ("MB", 1024 ** 2)):
+        if n >= size:
+            return "%.1f %s" % (n / size, unit)
+    return "%d B" % n
+
+
+def deliverable_manifest(paths: List[str], reason: str = "") -> str:
+    """v1.1: a RESULT carries a manifest, because a summary is not a delivery."""
+    if not paths:
+        return "\n## Delivered\n\nNo files. %s\n" % (reason or "Reason not given.")
+    rows = []
+    for raw in paths:
+        full = os.path.abspath(raw)
+        if not os.path.isfile(full):
+            raise Failure("artifact not found: %s" % raw, EXIT_USAGE)
+        with open(full, "rb") as fh:
+            data = fh.read()
+        rows.append([os.path.basename(full), os.path.dirname(full),
+                     _size_label(len(data)), core.sha256_bytes(data)])
+    header = "| file | folder | size | sha256 |\n|---|---|---|---|"
+    body = "\n".join("| %s | %s | %s | `%s` |" % tuple(row) for row in rows)
+    return "\n## Delivered\n\n%s\n%s\n" % (header, body)
+
+
 def cmd_result(args) -> int:
     cfg = args.cfg
     body = read_input(args.text, args.file, "result")
+    if not args.artifact and not args.no_artifact:
+        raise Failure(
+            "attach what you delivered: --artifact <path> (repeatable), or "
+            "--no-artifact \"why there is no file\"", EXIT_USAGE)
     if len(body.strip()) < 20:
         raise Failure("a RESULT must say what was done and where it lives "
                       "(at least 20 chars)", EXIT_USAGE)
+    body += deliverable_manifest(args.artifact or [], args.no_artifact or "")
     name = _write_event(cfg, args.task, "RESULT", body, cfg.agent,
-                        {"verified": "yes" if args.verified else "no"})
+                        {"verified": "yes" if args.verified else "no"},
+                        status_state="idle")
     print(name)
     return EXIT_OK
 
@@ -394,7 +430,8 @@ def cmd_result(args) -> int:
 def cmd_blocked(args) -> int:
     cfg = args.cfg
     body = "%s\n\nAsked: %s" % (args.why.strip(), args.ask.strip() or "(unset)")
-    name = _write_event(cfg, args.task, "BLOCKED", body, cfg.agent, {})
+    name = _write_event(cfg, args.task, "BLOCKED", body, cfg.agent, {},
+                        status_state="blocked")
     print(name)
     return EXIT_OK
 
@@ -407,13 +444,46 @@ def cmd_owner(args) -> int:
     return EXIT_OK
 
 
+def _write_status(cfg: Config, state: Optional[str] = None, current: Optional[str] = None,
+                  last_seen: Optional[str] = None, note: Optional[str] = None,
+                  heartbeat_only: bool = False) -> str:
+    """Create or revise STATUS_<agent>.md (v1.1: heartbeat_at is its own field)."""
+    name = "STATUS_%s%s" % (core.slug(cfg.agent), core.MD)
+    now = core.fmt_ts(core.now(cfg.utc_offset_hours))
+    transport = build(cfg)
+    try:
+        existing = transport.read(name).decode("utf-8", "replace")
+    except FileNotFoundError:
+        existing = ""
+    if not existing.strip():
+        text = core.render_status(cfg.agent, cfg.device, state or "idle",
+                                  current or "none", last_seen or "none",
+                                  note or "-", now)
+    else:
+        changes = {"protocol": core.PROTOCOL_LEVEL, "heartbeat_at": now}
+        if not heartbeat_only:
+            changes["updated_at"] = now
+            if state:
+                changes["state"] = state
+            if current is not None:
+                changes["current_task"] = current or "none"
+            if last_seen is not None:
+                changes["last_seen"] = last_seen or "none"
+            if note is not None:
+                changes["note"] = note or "-"
+        text = core.revise_status(existing, **changes)
+    transport.replace(name, text.encode("utf-8"))
+    return name
+
+
 def cmd_status(args) -> int:
     cfg = args.cfg
-    text = core.render_status(cfg.agent, cfg.device, args.state, args.current or "none",
-                              args.last_seen or "none", args.note or "-",
-                              core.fmt_ts(core.now(cfg.utc_offset_hours)))
-    name = "STATUS_%s%s" % (core.slug(cfg.agent), core.MD)
-    build(cfg).replace(name, text.encode("utf-8"))
+    if not args.state and not args.heartbeat:
+        raise Failure("give a state (online|idle|working|blocked|offline) "
+                      "or --heartbeat to refresh only the heartbeat", EXIT_USAGE)
+    name = _write_status(cfg, state=args.state, current=args.current,
+                         last_seen=args.last_seen, note=args.note,
+                         heartbeat_only=bool(args.heartbeat and not args.state))
     print(name)
     return EXIT_OK
 
@@ -424,7 +494,9 @@ def cmd_watch(args) -> int:
     if args.state_dir:
         cfg.state_dir = args.state_dir
     code, output = watch_run(build(cfg), paths, cfg.state_path,
-                             empty_is_error=not args.empty_ok)
+                             empty_is_error=not args.empty_ok,
+                             self_agent=cfg.agent,
+                             prefix=args.only_prefix or "")
     sys.stdout.write(output)
     return code
 
@@ -502,6 +574,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--accept", default=None)
     p.add_argument("--priority", default="normal", choices=["low", "normal", "high", "urgent"])
     p.add_argument("--needs-owner", action="store_true")
+    p.add_argument("--urgent", action="store_true",
+                   help="URGENT_ prefix: picked up by the 5-minute urgent lane")
     p.add_argument("--sender", default=None)
     p.set_defaults(func=cmd_new)
 
@@ -544,6 +618,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("task")
     p.add_argument("--text", default=None)
     p.add_argument("--file", default=None)
+    p.add_argument("--artifact", action="append", default=[],
+                   help="a file you delivered (repeatable); hashed into the manifest")
+    p.add_argument("--no-artifact", default="", metavar="REASON",
+                   help="why there is no file to deliver")
     p.add_argument("--verified", action="store_true", help="facts checked at the source")
     p.set_defaults(func=cmd_result)
 
@@ -564,7 +642,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_owner, ok=False)
 
     p = sub.add_parser("status", help="refresh my STATUS_<agent>.md")
-    p.add_argument("state", choices=["online", "idle", "working", "blocked", "offline"])
+    p.add_argument("state", nargs="?", default=None,
+                   choices=["online", "idle", "working", "blocked", "offline"])
+    p.add_argument("--heartbeat", action="store_true",
+                   help="refresh heartbeat_at only (keeps state/note untouched)")
     p.add_argument("--current", default="")
     p.add_argument("--last-seen", default="")
     p.add_argument("--note", default="")
@@ -573,6 +654,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("watch", help="deterministic change check for pollers")
     p.add_argument("--paths", default="", help="comma separated, default from config")
     p.add_argument("--state-dir", default="")
+    p.add_argument("--only-prefix", default="",
+                   help="only consider names starting with this (e.g. URGENT_)")
     p.add_argument("--empty-ok", action="store_true", help="accept an empty listing")
     p.set_defaults(func=cmd_watch)
 

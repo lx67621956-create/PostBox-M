@@ -10,6 +10,7 @@ gets a conflict and backs off. See docs/design-notes.md.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shutil
@@ -42,15 +43,19 @@ class RemoteFile:
     size: int
     mtime: str         # ISO-8601 as reported by the backend
     file_id: str = ""
+    md5: str = ""      # empty when the backend cannot provide one
 
-    def as_line(self) -> str:
+    def as_line(self, with_hash: bool = False) -> str:
+        if with_hash:
+            return "%s|%d|%s|%s" % (self.name, self.size, self.mtime, self.md5 or "-")
         return "%s|%d|%s" % (self.name, self.size, self.mtime)
 
 
 class Transport:
     kind = "abstract"
 
-    def list(self, sub: str = "", recursive: bool = False) -> List[RemoteFile]:
+    def list(self, sub: str = "", recursive: bool = False,
+             with_hash: bool = False) -> List[RemoteFile]:
         raise NotImplementedError
 
     def read(self, name: str) -> bytes:
@@ -94,7 +99,8 @@ class LocalTransport(Transport):
             raise TransportError("path escapes mailbox root: %r" % name)
         return target
 
-    def list(self, sub: str = "", recursive: bool = False) -> List[RemoteFile]:
+    def list(self, sub: str = "", recursive: bool = False,
+             with_hash: bool = False) -> List[RemoteFile]:
         base = self._abs(sub) if sub else self.root
         out: List[RemoteFile] = []
         if not os.path.isdir(base):
@@ -109,8 +115,13 @@ class LocalTransport(Transport):
                 full = os.path.join(dirpath, name)
                 rel = os.path.relpath(full, self.root).replace("\\", "/")
                 st = os.stat(full)
+                md5 = ""
+                if with_hash:
+                    with open(full, "rb") as fh:
+                        md5 = hashlib.md5(fh.read()).hexdigest()
                 out.append(RemoteFile(rel, st.st_size,
-                                      time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(st.st_mtime))))
+                                      time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(st.st_mtime)),
+                                      md5=md5))
         out.sort(key=lambda f: f.name)
         return out
 
@@ -208,18 +219,25 @@ class RcloneTransport(Transport):
         return self.spec + "/" + name.replace("\\", "/").lstrip("/") if name else self.spec
 
     # -- api -------------------------------------------------------------
-    def list(self, sub: str = "", recursive: bool = False) -> List[RemoteFile]:
+    def list(self, sub: str = "", recursive: bool = False,
+             with_hash: bool = False) -> List[RemoteFile]:
         import json
         cmd = ["lsjson", self._join(sub), "--files-only"]
         if recursive:
             cmd.append("-R")
+        if with_hash:
+            # Drive supplies md5Checksum natively; this is not an extra request
+            # per file, only one more field in the same listing.
+            cmd.append("--hash")
         proc = self._run(*cmd)
         try:
             rows = json.loads((proc.stdout or b"[]").decode("utf-8", "replace") or "[]")
         except ValueError as exc:
             raise TransportError("bad lsjson output: %s" % exc) from None
         out = [RemoteFile(r.get("Path", ""), int(r.get("Size") or 0),
-                          r.get("ModTime", ""), r.get("ID", "")) for r in rows]
+                          r.get("ModTime", ""), r.get("ID", ""),
+                          (r.get("Hashes") or {}).get("md5", ""))
+               for r in rows]
         out.sort(key=lambda f: f.name)
         return out
 
