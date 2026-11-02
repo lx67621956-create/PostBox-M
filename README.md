@@ -123,6 +123,9 @@ The naming follows a convention that has been running in production for months (
 
 ## About
 
-Built and maintained by **闷闷AI说**. It started as a way to stop relaying tasks by hand between agents on different machines; the folder-plus-immutable-events scheme turned out to hold on any storage, so it became a tool.
+Built and maintained by **闷闷AI说** — a channel about AI news and hands-on tests. The tool exists because relaying tasks by hand between agents on different machines does not scale; a shared folder plus immutable events turned out to hold on any storage, so it became a project.
+
+- YouTube: <https://www.youtube.com/@menmenAI>
+- Bilibili: <https://space.bilibili.com/34234499>
 
 MIT licensed.

@@ -31,6 +31,8 @@ postbox = "postbox.cli:main"
 [project.urls]
 Homepage = "https://github.com/lx67621956-create/PostBox-M"
 Source = "https://github.com/lx67621956-create/PostBox-M"
+YouTube = "https://www.youtube.com/@menmenAI"
+Bilibili = "https://space.bilibili.com/34234499"
 
 [tool.hatch.build.targets.wheel]
 packages = ["postbox"]

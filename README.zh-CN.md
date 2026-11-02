@@ -154,6 +154,9 @@ Google Drive 没有原子 create——实测 `rclone copyto --immutable` 在 Dri
 
 ## 关于
 
-由 **闷闷AI说** 维护。最初是为了让几个跑在不同机器上的 Agent 别再靠人转述任务，后来发现"共享文件夹 + 不可变事件"这套在什么网盘上都成立，就抽成了工具。
+由 **闷闷AI说** 维护。频道做 AI 科技资讯，新东西第一时间讲给您听；这个工具是顺手把几台机器上几个 Agent 的交接流程固化下来的产物。
+
+- YouTube：<https://www.youtube.com/@menmenAI>
+- B站：<https://space.bilibili.com/34234499>
 
 MIT 协议，随便用。
