@@ -1,0 +1,17 @@
+[
+  {
+    "to": "bob",
+    "title": "weekly-report",
+    "ask": "Summarise this week in five bullets. Every number needs a source URL and a date.",
+    "accept": "Five bullets, no filler, each with a link.",
+    "priority": "normal"
+  },
+  {
+    "to": "bob",
+    "title": "publish-episode-12",
+    "ask": "Upload episode 12 with the copy in 05_out/ep12.md.",
+    "accept": "Video is public, link posted back in the RESULT.",
+    "priority": "high",
+    "needs_owner_confirm": true
+  }
+]

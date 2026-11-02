@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+.postbox/config.json
+*.tmp
+.DS_Store
+uv.lock
