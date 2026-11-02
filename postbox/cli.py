@@ -514,13 +514,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--state", default="")
     p.add_argument("--to", default="")
     p.add_argument("--mine", default="")
+    p.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                   help="machine-readable output")
     p.set_defaults(func=cmd_ls)
 
     p = sub.add_parser("show", help="show one task and its events")
     p.add_argument("task")
+    p.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                   help="machine-readable output")
     p.set_defaults(func=cmd_show)
 
     p = sub.add_parser("inbox", help="what needs me")
+    p.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                   help="machine-readable output")
     p.set_defaults(func=cmd_inbox)
 
     p = sub.add_parser("ack", help="accept a task (exclusive: first ACK wins)")
@@ -572,6 +578,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("lint", help="review the mailbox for broken hand-offs")
     p.add_argument("--sla", type=int, default=0)
+    p.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                   help="machine-readable output")
     p.set_defaults(func=cmd_lint)
 
     p = sub.add_parser("doctor", help="is this checkout able to talk?")
