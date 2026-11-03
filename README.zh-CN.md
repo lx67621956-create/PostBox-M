@@ -77,10 +77,46 @@ postbox init --transport local --path /path/to/shared-folder --agent alice
 | `owner-ok` / `owner-no` | 人力批准 / 否决 |
 | `status` | 刷新自己的 `STATUS_<agent>.md`；`--heartbeat` 只动心跳时间 |
 | `watch` | 哑检查：指纹含 md5，无变化退出 0，有变化退出 10，掉线退出 11；`--only-prefix URGENT_` 只看急件 |
-| `lint` | 审查整箱：重复 ID、孤儿回执、双人交付、空交付、僵尸心跳、泄露的密钥 |
-| `doctor` | 这台机器通不通 |
+| `lint` | 审查整箱：重复 ID、孤儿回执、双人交付、空交付、僵尸心跳、泄露的密钥、同步冲突副本 |
+| `doctor` | 这台机器通不通：可达 + **可写**（真建一个探针文件、读回来、删掉） |
+| `providers` | 能用的后端一览，标了国内能不能用，每条都给了现成命令 |
+| `instructions` | 打印给 AI 的操作规则（`--lang zh`） |
 
 退出码有语义，方便脚本判断：`0` 正常、`2` 用法错、`3` 冲突、`4` 找不到、`5` 待批准、`6` lint 有错误、`10` 有变化、`11` 降级。
+
+## 没有 Google Drive、也翻不了墙
+
+邮箱就是一个文件夹。只要能把同一个文件夹在两台机器之间同步，就是合法后端；七个预设里只有三个跟 Google 有关。
+
+```
+$ postbox providers
+PRESET    IN CN    NEEDS                      WHAT IT IS
+local     yes      nothing                    你现有的同步工具在同步的那个文件夹
+webdav    yes      rclone + 地址/应用密码       坚果云、Nextcloud、Alist
+sftp      yes      rclone + ssh key            你自己那台 VPS
+s3        depends  rclone + endpoint/key       MinIO、R2、阿里云 OSS（S3 网关）
+gdrive    no       rclone + Google OAuth       Google Drive
+onedrive  no       rclone + Microsoft OAuth    OneDrive
+```
+
+**新人第一条路是 `local`**：不装 rclone、不做 OAuth、不注册账号、不需要网络。两个 checkout 指向同一个文件夹，邮箱就成立了——测试套件就是这么跑的。
+
+用桌面同步客户端要老实认两件事：
+
+- 文件是"同步到了才算"，不是"对方写了就算"，轮询间隔必须大于同步延迟；
+- 两边同时改同一个文件时，客户端会生成 `foo (1).md`。原名那个还是原名，PostBox 会忽略副本，`lint` 会报 `sync_conflict_copy`，但得有人真的去看。
+
+## 给 AI 的说明书
+
+邮箱能不能用，取决于几个 Agent 是不是遵守同一套规矩。`postbox instructions` 打的就是这本规矩：先认领再干活、不许改别人的文件、退出码 10 才代表"有变化"、RESULT 没有交付清单不算交付。
+
+```
+postbox instructions --lang zh > AGENTS.md
+```
+
+粘进系统提示词、`AGENTS.md`、`CLAUDE.md`、项目技能，或者你的 Agent 开机读的任何地方。`examples/AGENTS.md` 里是同一份。
+
+**为什么必须给**：工具能管住"文件命名和状态"，管不住"模型想偷懒"。没有这份提示，模型最常犯的三个错是——不 ack 就开工（两个人做同一个任务）、`result` 里写一句"已完成"（没有交付物）、把 10 当成错误码然后重试一整天。规矩写进提示词，比在代码里加十道校验便宜。
 
 ## 文件夹里到底多了什么
 

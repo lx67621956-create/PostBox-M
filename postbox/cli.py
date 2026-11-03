@@ -517,14 +517,151 @@ def cmd_lint(args) -> int:
     return EXIT_LINT if any(l == "error" for l, _c, _m in findings) else EXIT_OK
 
 
+PROVIDERS = [
+    {"preset": "local", "cn": "yes", "needs": "nothing (any folder your OS can see)",
+     "what": "A folder that some sync tool replicates: Syncthing, Nutstore/坚果云 client, "
+             "Dropbox, OneDrive, iCloud, a USB stick, a LAN share.",
+     "init": 'postbox init --transport local --path "/path/to/shared/postbox" --agent alice'},
+    {"preset": "webdav", "cn": "yes", "needs": "rclone + WebDAV url and app password",
+     "what": "Nutstore (坚果云), Nextcloud, Alist, or any WebDAV server. No Google involved.",
+     "init": 'rclone config create nutstore webdav url=https://dav.jianguoyun.com/dav/ user=YOU pass=APP_PASSWORD\n'
+             'postbox init --transport rclone --remote nutstore:postbox --agent alice'},
+    {"preset": "sftp", "cn": "yes", "needs": "rclone + ssh key",
+     "what": "Your own VPS over SSH. Great if the agents are on machines you already own.",
+     "init": 'rclone config create vps sftp host=1.2.3.4 user=ubuntu key_file=~/.ssh/id_ed25519\n'
+             'postbox init --transport rclone --remote vps:postbox --agent alice'},
+    {"preset": "s3", "cn": "depends", "needs": "rclone + endpoint/key",
+     "what": "S3-compatible storage: MinIO, Cloudflare R2, Aliyun OSS (S3 gateway), Backblaze.",
+     "init": 'rclone config create store s3 provider=Other endpoint=... access_key_id=... secret_access_key=...\n'
+             'postbox init --transport rclone --remote store:postbox --agent alice'},
+    {"preset": "gdrive", "cn": "no", "needs": "rclone + Google OAuth (needs access to Google)",
+     "what": "Google Drive. Simplest if you already have it, unusable where Google is blocked.",
+     "init": 'rclone config            # create a drive remote, then:\n'
+             'postbox init --transport rclone --remote gdrive:team/postbox --agent alice'},
+    {"preset": "onedrive", "cn": "no", "needs": "rclone + Microsoft OAuth",
+     "what": "OneDrive / SharePoint.",
+     "init": 'rclone config            # create a onedrive remote, then:\n'
+             'postbox init --transport rclone --remote onedrive:postbox --agent alice'},
+    {"preset": "dropbox", "cn": "no", "needs": "rclone + Dropbox OAuth",
+     "what": "Dropbox.",
+     "init": 'rclone config            # create a dropbox remote, then:\n'
+             'postbox init --transport rclone --remote dropbox:postbox --agent alice'},
+]
+
+INSTRUCTIONS_EN = """# PostBox-M — operating rules for the agent
+
+You are one agent in a shared mailbox. The mailbox is a folder; other agents
+write to it too, and none of you can talk to the others directly.
+
+## Every task addressed to you
+
+1. `postbox inbox` — what is mine.
+2. `postbox show <id>` — read the task and its history before acting.
+3. `postbox ack <id>` — claim it. Exit 3 means someone else has it: stop, do not work on it.
+4. Do the work. `postbox note <id> --text "..."` on long jobs.
+5. `postbox result <id> --artifact <file> [--artifact ...] --text "what/where"`
+   No file to deliver: `--no-artifact "<reason>"`. A sentence in chat is not a delivery.
+6. `postbox status idle` when you stop working.
+
+## Hard rules
+
+- Never edit a task file, a RESULT, or another agent's file. Add a new file.
+- `needs_owner_confirm: yes` means do not start. `postbox owner-ok <id>` is the
+  only thing that unblocks it; exit code 5 means "not approved yet".
+- Never write passwords, tokens, card numbers or ID numbers into the mailbox.
+- Deliverables must be files with a size and a hash, listed in the RESULT.
+- Poll with `postbox watch`: exit 0 = nothing changed (do nothing, say nothing),
+  10 = something changed (read the diff, then `postbox inbox`), 11 = mailbox
+  unreachable (report it; do not guess what changed).
+- One task, one owner. If in doubt, `postbox show` before doing anything.
+
+## Exit codes
+
+0 ok | 2 usage | 3 conflict | 4 not found | 5 needs approval | 6 lint errors |
+10 changed | 11 degraded / unreachable
+"""
+
+INSTRUCTIONS_ZH = """# PostBox-M — 给 Agent 的操作规则
+
+你是共享邮箱里的一个 Agent。邮箱就是一个文件夹，别的 Agent 也在往里写，
+你们之间没有直接的通信通道。
+
+## 每个派给你的任务
+
+1. `postbox inbox` — 哪些是我的。
+2. `postbox show <id>` — 动手之前先读任务和它的历史。
+3. `postbox ack <id>` — 认领。退出码 3 表示别人已经认领：停手，不要做。
+4. 干活。长任务用 `postbox note <id> --text "..."` 记进度。
+5. `postbox result <id> --artifact <文件> ... --text "做了什么/成品在哪"`
+   没有文件就 `--no-artifact "理由"`。聊天里说一句"完成了"不算交付。
+6. 收工时 `postbox status idle`。
+
+## 硬规则
+
+- 不许改任务文件、RESULT、别人的文件。要补充就新建文件。
+- 任务写了 `needs_owner_confirm: yes` 就不许开工，只有 `postbox owner-ok <id>`
+  能解锁；退出码 5 就是"还没批准"。
+- 密码、token、卡号、身份证号一律不许写进邮箱。
+- 交付物必须是文件，要带大小和哈希，写进 RESULT 的清单。
+- 轮询用 `postbox watch`：退出码 0 = 没变化（什么都别做，也别说话），
+  10 = 有变化（先看 diff，再 `postbox inbox`），11 = 邮箱不可达（如实报告，
+  不要猜发生了什么）。
+- 一个任务只有一个负责人。拿不准就先 `postbox show`。
+
+## 退出码
+
+0 正常 | 2 用法错 | 3 冲突 | 4 找不到 | 5 待批准 | 6 lint 有错 |
+10 有变化 | 11 降级/不可达
+"""
+
+
+def cmd_providers(args) -> int:
+    if args.json:
+        print(json.dumps(PROVIDERS, ensure_ascii=False, indent=2))
+        return EXIT_OK
+    rows = [[p["preset"], p["cn"], p["needs"], p["what"]] for p in PROVIDERS]
+    print(table(rows, ["PRESET", "IN CN", "NEEDS", "WHAT IT IS"]))
+    print("")
+    print("# ready-to-run (swap the path / remote / agent name)")
+    for item in PROVIDERS:
+        print("\n[%s]" % item["preset"])
+        for line in item["init"].split("\n"):
+            print("  " + line)
+    print("\n# the 'local' preset needs no rclone and no Google: any folder your "
+          "sync tool already replicates\n# point two checkouts at it with --path "
+          "and you are done")
+    return EXIT_OK
+
+
+def cmd_instructions(args) -> int:
+    text = INSTRUCTIONS_ZH if args.lang == "zh" else INSTRUCTIONS_EN
+    if args.json:
+        print(json.dumps({"language": args.lang, "format": "markdown", "text": text},
+                         ensure_ascii=False, indent=2))
+    else:
+        sys.stdout.write(text)
+    return EXIT_OK
+
+
 def cmd_doctor(args) -> int:
     cfg = args.cfg
     problems = 0
     print("config   %s" % os.path.join(cfg.root, ".postbox", "config.json"))
     print("transport %s%s" % (cfg.transport, "  " + (cfg.remote or cfg.resolve(cfg.path))))
     try:
-        files = build(cfg).list()
+        t = build(cfg)
+        files = t.list()
         print("reachable yes — %d object(s)" % len(files))
+        probe = ".postbox-write-probe-%d.md" % os.getpid()
+        try:
+            t.create(probe, b"probe")
+            if t.read(probe) != b"probe":
+                raise TransportError("read-back mismatch")
+            t.delete(probe)
+            print("writable  yes — create, read, delete all work")
+        except (ConflictError, TransportError, FileNotFoundError, OSError) as exc:
+            problems += 1
+            print("writable  NO  — %s" % str(exc)[:200])
     except TransportError as exc:
         problems += 1
         print("reachable NO  — %s" % str(exc)[:300])
@@ -667,6 +804,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("doctor", help="is this checkout able to talk?")
     p.set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("providers", help="storage backends that work, with the command for each")
+    p.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                   help="machine-readable output")
+    p.set_defaults(func=cmd_providers)
+
+    p = sub.add_parser("instructions",
+                       help="print the rules an AI agent must follow (paste into its prompt)")
+    p.add_argument("--lang", default="en", choices=["en", "zh"])
+    p.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                   help="machine-readable output")
+    p.set_defaults(func=cmd_instructions)
     return parser
 
 

@@ -66,10 +66,54 @@ postbox init --transport local --path /path/to/shared-folder --agent alice
 | `owner-ok` / `owner-no` | record the human decision |
 | `status` | refresh `STATUS_<agent>.md` heartbeat |
 | `watch` | deterministic change check: 0 unchanged, 10 changed, 11 degraded |
-| `lint` | duplicate ids, orphan events, double results, empty deliveries, zombie heartbeats, leaked secrets |
-| `doctor` | can this checkout talk? |
+| `lint` | duplicate ids, orphan events, double results, empty deliveries, zombie heartbeats, leaked secrets, sync conflict copies |
+| `doctor` | can this checkout talk? reachable + **writable**, proven with a create/read/delete probe |
+| `providers` | every backend that works, marked for mainland China, with a runnable command |
+| `instructions` | print the rules an AI agent must follow (`--lang zh`) |
 
 Exit codes carry meaning: `0` ok, `2` usage, `3` conflict, `4` not found, `5` needs approval, `6` lint errors, `10` changed, `11` degraded.
+
+## No Google Drive, no VPN
+
+The mailbox is just a folder. Anything that replicates a folder between two
+machines is a valid backend, and only three of the presets involve Google at all.
+
+```
+$ postbox providers
+PRESET    IN CN    NEEDS                      WHAT IT IS
+local     yes      nothing                    a folder your existing sync tool replicates
+webdav    yes      rclone + url/app password  Nutstore (坚果云), Nextcloud, Alist
+sftp      yes      rclone + ssh key            a VPS you already own
+s3        depends  rclone + endpoint/key       MinIO, R2, Aliyun OSS via its S3 gateway
+gdrive    no       rclone + Google OAuth       Google Drive
+onedrive  no       rclone + Microsoft OAuth    OneDrive / SharePoint
+```
+
+`local` is the one to try first: no rclone, no OAuth, no account, no network.
+Point two checkouts at the same folder and you have a working mailbox — which is
+exactly how the test suite runs.
+
+Two honest caveats for desktop sync clients:
+
+- a file exists for the other side only once the client has synced it, so the
+  poll interval has to be longer than your sync latency;
+- when two edits collide, the client writes `foo (1).md` next to `foo.md`. The
+  original keeps its name and PostBox ignores the copy; `lint` reports it as
+  `sync_conflict_copy`, but somebody has to actually look at it.
+
+## Telling the AI what to do
+
+A mailbox only works if the agents share the same rules. `postbox instructions`
+prints that rulebook — acknowledge before working, never edit another agent's
+file, exit code 10 means "something changed", a RESULT without a manifest is not
+a delivery:
+
+```
+postbox instructions > AGENTS.md     # or: postbox instructions --lang zh
+```
+
+Paste it into the system prompt, `AGENTS.md`, `CLAUDE.md`, a project skill, or
+whatever your agent reads at startup. `examples/AGENTS.md` ships the same text.
 
 ## On disk
 

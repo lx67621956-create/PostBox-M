@@ -68,6 +68,9 @@ class Transport:
     def replace(self, name: str, data: bytes) -> None:
         raise NotImplementedError
 
+    def delete(self, name: str) -> None:
+        raise NotImplementedError
+
     def exists(self, name: str) -> bool:
         try:
             self.read(name)
@@ -156,6 +159,12 @@ class LocalTransport(Transport):
 
     def mkdir(self, sub: str) -> None:
         os.makedirs(self._abs(sub), exist_ok=True)
+
+    def delete(self, name: str) -> None:
+        try:
+            os.remove(self._abs(name))
+        except FileNotFoundError:
+            raise FileNotFoundError(name) from None
 
 
 # --------------------------------------------------------------------------
@@ -297,6 +306,12 @@ class RcloneTransport(Transport):
                 raise ConflictError(name)
             return True
         raise TransportError("wrote %s but it was still unreadable after retries" % name)
+
+    def delete(self, name: str) -> None:
+        try:
+            self._run("deletefile", self._join(name))
+        except NotFound:
+            raise FileNotFoundError(name) from None
 
     def mkdir(self, sub: str) -> None:
         self._run("mkdir", self._join(sub))

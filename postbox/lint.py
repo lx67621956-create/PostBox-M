@@ -147,6 +147,14 @@ def lint(mailbox: Mailbox, sla_hours: int = 48, now=None) -> List[Tuple[str, str
             out.append(("error", "secret",
                         "%s matches %s — rotate it and remove it from the folder"
                         % (rf.name, ", ".join(hits))))
+    # 10. sync tools that could not merge leave a copy behind under a new name
+    for rf in mailbox.files:
+        name = rf.name.split("/")[-1]
+        low = name.lower()
+        if "(1)" in name or "conflicted copy" in low or "冲突" in name:
+            out.append(("warn", "sync_conflict_copy",
+                        "%s was created by a sync tool that could not merge — the real "
+                        "file kept its name and PostBox ignores this copy" % name))
     return out
 
 

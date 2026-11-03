@@ -25,6 +25,9 @@ class Broken(Transport):
     def replace(self, name, data):
         self.inner.replace(name, data)
 
+    def delete(self, name):
+        return self.inner.delete(name)
+
 
 def touch(path, text="x", mtime=1_700_000_000):
     full = os.path.join(path, text if not text.endswith(".md") else text)
