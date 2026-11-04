@@ -31,6 +31,10 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    # Flipped on only after the trusted publisher exists on pypi.org
+    # (repo Settings -> Variables -> PYPI_READY=true). Until then a tag still
+    # produces downloadable artifacts on the Release page, without a red build.
+    if: ${{ vars.PYPI_READY == 'true' }}
     environment: pypi
     permissions:
       id-token: write
