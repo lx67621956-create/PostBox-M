@@ -850,7 +850,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        if args.command == "init":
+        if args.command in ("init", "providers", "instructions"):
+            # these three must work before a mailbox exists: they are how you pick one
             args.cfg = None
             return args.func(args)
         cfg = Config.load(args.root)

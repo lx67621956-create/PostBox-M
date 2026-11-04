@@ -20,6 +20,16 @@ def test_providers_lists_a_no_google_path(tmp_path):
     assert "nothing" in local
 
 
+def test_providers_and_instructions_work_before_init(tmp_path):
+    """A stranger must be able to ask 'which backend' before creating anything."""
+    bare = str(tmp_path / "nothing-here")
+    os.makedirs(bare)
+    proc = run(bare, "providers", expect=0)
+    assert "git" in proc.stdout and "local" in proc.stdout
+    proc = run(bare, "instructions", "--lang", "zh", expect=0)
+    assert "退出码" in proc.stdout
+
+
 def test_providers_json_is_machine_readable(tmp_path):
     roots, _shared = init_agents(tmp_path)
     proc = run(roots["alice"], "providers", "--json", expect=0)
