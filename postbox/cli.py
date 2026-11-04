@@ -330,9 +330,12 @@ def cmd_inbox(args) -> int:
     return EXIT_OK
 
 
-def _event_name(entry: Entry, kind: str, agent: str, existing: List[str]) -> str:
+def _event_name(entry: Entry, kind: str, agent: str, existing: List[str],
+                unique: bool = False) -> str:
     base = core.event_filename(entry.task.path, kind, agent)
-    if base not in existing:
+    if unique or base not in existing:
+        # `unique` kinds (ACK, OWNER_OK/NO) may exist once per agent and task: racing
+        # writers must collide on the same name so that create-if-absent picks a winner.
         return base
     for n in range(2, 100):
         candidate = core.event_filename(entry.task.path, kind, agent, n)
@@ -346,7 +349,8 @@ def _files(box: Mailbox) -> List[str]:
 
 
 def _write_event(cfg: Config, task_id: str, kind: str, body: str, agent: str,
-                 extra: dict, gate: bool = False, status_state: str = "") -> str:
+                 extra: dict, gate: bool = False, status_state: str = "",
+                 unique: bool = False) -> str:
     instance = "%d-%s" % (os.getpid(), socket.gethostname().split(".")[0][:24])
     box = mailbox(cfg)
     try:
@@ -362,7 +366,7 @@ def _write_event(cfg: Config, task_id: str, kind: str, body: str, agent: str,
         # v1.1 order rule: STATUS is updated before the RESULT/BLOCKED lands.
         _write_status(cfg, state=status_state, current=task_id,
                       note="%s %s" % (kind.lower(), task_id))
-    name = _event_name(entry, kind, agent, _files(box))
+    name = _event_name(entry, kind, agent, _files(box), unique=unique)
     text = core.render_event(kind, agent, core.fmt_ts(core.now(cfg.utc_offset_hours)),
                              body, instance=instance, **extra)
     payload = text.encode("utf-8")
@@ -391,7 +395,8 @@ def cmd_ack(args) -> int:
         raise Failure("%s was already accepted by %s — do not work on it twice."
                       % (entry.task.task_id, already[0]), EXIT_CONFLICT)
     body = args.note or "Received. Starting now."
-    name = _write_event(cfg, entry.task.task_id, "ACK", body, cfg.agent, {}, gate=True)
+    name = _write_event(cfg, entry.task.task_id, "ACK", body, cfg.agent, {}, gate=True,
+                        unique=True)
     print(name)
     return EXIT_OK
 
@@ -458,7 +463,7 @@ def cmd_blocked(args) -> int:
 def cmd_owner(args) -> int:
     kind = "OWNER_OK" if args.ok else "OWNER_NO"
     body = args.note or ("Approved to proceed." if args.ok else "Not approved. Stop.")
-    name = _write_event(args.cfg, args.task, kind, body, args.cfg.agent, {})
+    name = _write_event(args.cfg, args.task, kind, body, args.cfg.agent, {}, unique=True)
     print(name)
     return EXIT_OK
 

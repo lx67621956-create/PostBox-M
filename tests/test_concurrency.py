@@ -29,6 +29,27 @@ def test_only_one_thread_can_create_the_same_file(tmp_path):
     assert len(wins) == 1 and len(losses) == 11
 
 
+def test_unique_event_names_never_take_a_suffix():
+    """ACK/OWNER_* are once-per-agent facts.
+
+    If a second writer sees the first ACK in its snapshot and silently picks
+    `_ACK_bob_2.md`, two agents both exit 0 and the task has two owners. That is
+    exactly what macOS CI caught; the name must stay fixed so create-if-absent
+    can pick a single winner.
+    """
+    from types import SimpleNamespace
+    from postbox.cli import _event_name
+    from postbox import core
+
+    path = "2026-01-01_TASK-20260101-1200-alice-to-bob_race.md"
+    entry = SimpleNamespace(task=SimpleNamespace(path=path))
+    base = core.event_filename(path, "ACK", "bob")
+    assert _event_name(entry, "ACK", "bob", [base], unique=True) == base
+    # notes are allowed to pile up, so they do get a suffix
+    note = core.event_filename(path, "NOTE", "bob")
+    assert _event_name(entry, "NOTE", "bob", [note]) != note
+
+
 def test_concurrent_ack_processes_have_one_winner(tmp_path):
     shared = tmp_path / "mailbox"
     roots = {}
