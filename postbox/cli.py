@@ -846,7 +846,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _force_utf8() -> None:
+    """Windows consoles default to a legacy code page; our output has arrows and Chinese.
+
+    Without this, `postbox providers` dies with UnicodeEncodeError on any machine whose
+    stdout is cp1252/cp437 — including the GitHub Actions runner and a plain cmd.exe.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    _force_utf8()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
