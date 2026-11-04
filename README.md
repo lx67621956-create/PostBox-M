@@ -1,192 +1,123 @@
 # PostBox-M
 
-**Turn the shared folder you already have into a task inbox between autonomous agents.**
+**A folder your agents can share. That is the whole infrastructure.**
 
-[中文说明](README.zh-CN.md)
+English · [中文](README.zh-CN.md) · [Español](README.es.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt-BR.md)
 
-You run several agents on machines that cannot talk to each other: a laptop, a desktop, a cloud box. The one thing they already share is a folder — Google Drive, Dropbox, Syncthing, a network share. PostBox-M makes that folder a task queue with a durable hand-off record.
+Two or more AI agents, on machines that cannot reach each other, working one
+shared queue. No broker, no server, no database, no account, no VPN. If your
+agents can read and write a folder — Google Drive, a private git repo, a
+Syncthing pair, a USB stick — they can hand work to each other.
 
-No server, no database, no broker, no per-agent API keys. Python standard library only; the network backend is `rclone`, so you reuse the OAuth you already did.
+## What you actually get
 
-## What it actually fixes
+**1. Nothing to run.**
+The mailbox *is* a folder. No daemon to deploy, no port to open, no token to
+rotate, no broker to keep alive at 3am. If the folder exists, the system is up.
+Your infrastructure bill for the message bus is zero.
 
-1. **A task is discovered once and claimed once.** `ack` is exclusive; the second agent gets exit code 3 instead of doing the work twice.
-2. **Records are never overwritten.** Task files are written once and never edited. ACKs, results and blockers are separate immutable files named after their author.
-3. **Human approval cannot be bypassed.** A task with `needs_owner_confirm: yes` refuses `ack` (exit 5) until someone runs `owner-ok`.
-4. **Polling costs nothing when nothing happens.** `postbox watch` prints byte-identical output until the folder changes, so a supervisor can diff stdout and skip the model entirely.
-5. **A flaky drive doesn't become a page storm.** Rate limits, outages and crashes replay the last good baseline plus one constant marker line.
+**2. One owner per task, enforced by the filesystem.**
+Claiming a job is `create-if-absent`. Six agents racing for the same task:
+exactly one gets it, the other five exit with code 3 and back off. Double work
+stops happening because two agents "agreed" — it stops because one of them
+physically could not create the file.
+
+**3. Nothing is ever overwritten.**
+A task is written once and never edited. Every action — ack, note, result,
+blocker — is a new file with a unique name. A job's history is therefore complete
+by construction, not by discipline, and on the git backend `git log` proves who
+claimed what and when, to a third party.
+
+**4. Polling is free when nothing happened.**
+`postbox watch` prints byte-identical output while the folder is unchanged and
+exits 0. A cron job compares the output — or just the exit code — and skips the
+model call entirely. An idle agent costs zero tokens and only wakes when there is
+really something new.
+
+**5. A delivery is a file with a hash, not a sentence.**
+`postbox result --artifact report.md` writes file, folder, size and sha256 into
+the receipt. "Done" said in a chat is not a delivery, and the tool will not let
+an agent record it as one.
+
+**6. Runs where you already are.**
+A private repo on Gitee, a Nutstore WebDAV folder, a VPS over SSH, Google Drive,
+two laptops on the same LAN. Nobody needs a Google account, nobody needs a VPN,
+nobody needs to open an inbound port.
+
+**7. Zero dependencies.**
+Python standard library only, Python 3.9+, one command. Nothing to compile, no
+lockfile, no supply chain to audit.
 
 ## Install
 
 ```bash
-git clone https://github.com/lx67621956-create/PostBox-M
-cd PostBox-M
-uv tool install .        # or: pip install .   (Python 3.9+, no dependencies)
+pip install https://github.com/lx67621956-create/PostBox-M/releases/download/v0.4.0/postbox_m-0.4.0-py3-none-any.whl
 ```
 
-`pip install postbox-m` works as soon as the first release is uploaded; the name
-is still free and `.github/workflows/release.yml` is already wired for it.
+Or from source: `git clone … && uv tool install .`
 
-Zero runtime dependencies. Backend is a git repository, an `rclone` remote (Google Drive, OneDrive, S3, WebDAV…), or a plain local folder that some sync tool replicates.
-
-## Five-minute tour
+## Sixty seconds
 
 ```bash
 # machine A
-postbox init --transport rclone --remote gdrive:team/inbox --agent alice
-postbox new --to bob --title "weekly report" \
-  --ask "Five bullets, each with a primary source and a date" \
-  --accept "Five bullets, no filler, links open"
+postbox init --transport local --path "~/Dropbox/team-inbox" --agent alice
+postbox new --to bob --title "weekly report" --ask "Five bullets, numbers only."
 
 # machine B
-postbox init --transport rclone --remote gdrive:team/inbox --agent bob
-postbox inbox
-postbox ack 20261102-1806-alice-to-bob-01 --note "on it, 6pm"
-postbox result 20261102-1806-alice-to-bob-01 --artifact weekly.md --verified
-
-# machine A
-postbox inbox     # replies on tasks you sent →
-postbox show 20261102-1806-alice-to-bob-01
+postbox init --transport local --path "~/Dropbox/team-inbox" --agent bob
+postbox inbox          # 1 task, from alice
+postbox ack <id>
+postbox result <id> --artifact weekly.md --text "Numbers for week 45, sources in the file"
 ```
 
-Offline / no drive at all:
+That is the whole loop. Everything else — `watch`, `lint`, `doctor` — exists to
+keep it running unattended.
+
+## Pick a backend
+
+`postbox providers` prints every option with a runnable command:
+
+| preset | works in mainland China | what it is |
+|---|---|---|
+| `git` | yes | a private repo on Gitee / GitHub / your own VPS; one commit per write |
+| `local` | yes | any folder your existing sync tool already replicates |
+| `webdav` | yes | Nutstore (坚果云), Nextcloud, Alist |
+| `sftp` | yes | a VPS you already own |
+| `s3` | depends | MinIO, Cloudflare R2, Aliyun OSS |
+| `gdrive` | no | Google Drive |
+| `onedrive` / `dropbox` | no | OneDrive, Dropbox |
+
+`local` needs no rclone, no OAuth, no account and no network — two checkouts
+pointed at the same folder are a working mailbox, which is exactly how the test
+suite runs.
+
+## For the AI agents
+
+A queue only works if every agent plays by the same rules, so the rules ship with
+the tool:
 
 ```bash
-postbox init --transport local --path /path/to/shared-folder --agent alice
+postbox instructions --lang zh > AGENTS.md
 ```
 
-## Commands
+It states the loop (ack before work, manifest in the result), the hard rules
+(never edit another agent's file, never write a secret) and the exit codes that
+mean "you lost the race" versus "the mailbox is unreachable". Paste it into the
+system prompt, `AGENTS.md`, `CLAUDE.md` or a project skill.
 
-| command | what it does |
-|---|---|
-| `init` | create `.postbox/config.json` and the mailbox |
-| `new` | create a task (`--needs-owner` gates it behind human approval) |
-| `dispatch tasks.json` | create a batch from JSON |
-| `inbox` | tasks for me, tasks waiting for approval, new replies on what I sent |
-| `ls` / `show` | list / one task with its full event history |
-| `ack` | claim (3 = already claimed, 5 = needs approval) |
-| `note` | progress, no state change |
-| `result` | deliver: `--artifact <file>` (repeatable) builds the manifest, or `--no-artifact "<reason>"` |
-| `blocked` | report a blocker and who you are asking |
-| `owner-ok` / `owner-no` | record the human decision |
-| `status` | refresh `STATUS_<agent>.md` heartbeat |
-| `watch` | deterministic change check: 0 unchanged, 10 changed, 11 degraded |
-| `lint` | duplicate ids, orphan events, double results, empty deliveries, zombie heartbeats, leaked secrets, sync conflict copies |
-| `doctor` | can this checkout talk? reachable + **writable**, proven with a create/read/delete probe |
-| `providers` | every backend that works, marked for mainland China, with a runnable command |
-| `instructions` | print the rules an AI agent must follow (`--lang zh`) |
+## Fine print
 
-Exit codes carry meaning: `0` ok, `2` usage, `3` conflict, `4` not found, `5` needs approval, `6` lint errors, `10` changed, `11` degraded.
+Two things worth knowing: a synced folder only shows a file after the client has
+delivered it, so poll slower than your sync latency; and when two edits collide a
+desktop client writes `foo (1).md` beside `foo.md` — `lint` reports it, and the
+original is untouched because nothing in this system is ever rewritten in place.
 
-## No Google Drive, no VPN
-
-The mailbox is just a folder. Anything that replicates a folder between two
-machines is a valid backend, and only three of the presets involve Google at all.
-
-```
-$ postbox providers
-PRESET    IN CN    NEEDS                      WHAT IT IS
-git       yes      git + a repo               a private repo on Gitee/GitHub/your VPS
-local     yes      nothing                    a folder your existing sync tool replicates
-webdav    yes      rclone + url/app password  Nutstore (坚果云), Nextcloud, Alist
-sftp      yes      rclone + ssh key            a VPS you already own
-s3        depends  rclone + endpoint/key       MinIO, R2, Aliyun OSS via its S3 gateway
-gdrive    no       rclone + Google OAuth       Google Drive
-onedrive  no       rclone + Microsoft OAuth    OneDrive / SharePoint
-```
-
-`local` is the one to try first: no rclone, no OAuth, no account, no network.
-Point two checkouts at the same folder and you have a working mailbox — which is
-exactly how the test suite runs.
-
-`git` is the durable one. Every write is a commit, so the mailbox has an audit
-trail for free:
-
-```
-postbox init --transport git --clone https://gitee.com/YOU/inbox.git --agent alice
-```
-
-Two agents racing for the same task both commit and both push; git accepts one
-and rejects the other, and the rejected one gets exit code 3. That is the same
-rule as every other backend, enforced by the remote instead of by us.
-
-Two honest caveats for desktop sync clients:
-
-- a file exists for the other side only once the client has synced it, so the
-  poll interval has to be longer than your sync latency;
-- when two edits collide, the client writes `foo (1).md` next to `foo.md`. The
-  original keeps its name and PostBox ignores the copy; `lint` reports it as
-  `sync_conflict_copy`, but somebody has to actually look at it.
-
-## Telling the AI what to do
-
-A mailbox only works if the agents share the same rules. `postbox instructions`
-prints that rulebook — acknowledge before working, never edit another agent's
-file, exit code 10 means "something changed", a RESULT without a manifest is not
-a delivery:
-
-```
-postbox instructions > AGENTS.md     # or: postbox instructions --lang zh
-```
-
-Paste it into the system prompt, `AGENTS.md`, `CLAUDE.md`, a project skill, or
-whatever your agent reads at startup. `examples/AGENTS.md` ships the same text.
-
-## On disk
-
-```
-2026-11-02_TASK-20261102-1806-alice-to-bob-01_alice-to-bob_weekly-report.md
-                                    ..._ACK_bob.md
-                                    ..._RESULT_bob.md
-```
-
-```markdown
----
-id: 20261102-1806-alice-to-bob-01
-created_at: 2026-11-02 18:06:45 +0800
-from: alice
-to: bob
-priority: normal
-state: new
-needs_owner_confirm: no
----
-
-# weekly report
-```
-
-Long file names are the wire format. The upside is that a human can read, fix and audit the queue from a phone; the downside is that file names are long. I picked repairable.
-
-## Design decisions worth knowing
-
-**State is derived, not stored.** `state:` is written once at creation. Everything after that is inferred from immutable event files: an ACK means `ack`, a RESULT means `done`, a BLOCKED means `blocked`. There is no "update the status line" operation, so there is no last-writer-wins race on a status line.
-
-**Claiming is not a lock.** Google Drive has no atomic create — `rclone copyto --immutable` silently overwrites on Drive (returncode 0, measured), so every "reserve this name" trick is a fake mutex. PostBox-M instead gives each task exactly one owner, names every event after its author, and verifies writes by reading them back. Mutual exclusion comes from the one-owner rule, not from an API promise.
-
-**Pollers must be byte-stable.** `postbox watch` prints exactly the same bytes until something changes. On failure it replays the last baseline plus a constant `STATUS|DEGRADED|…` line — no timestamps, or every tick would look new and wake the model forever. Two consecutive failures are required before that line appears, and it disappears on recovery: one wake-up per outage.
-
-**Idempotency lives above the transport.** `create` treats an existing name as a conflict and does not guess. Whether a conflict is "my own retry" is decided by the application using an `instance: <pid>-<host>` field in the front matter. Pushing idempotency down into `create` makes every concurrent claim "succeed".
-
-**A fingerprint without a hash is a guess.** Name + size + mtime misses a file edited in place to the same length within the same second — and it misses it silently, which is the worst kind. The watch line carries an md5 (`rclone` gets it from Drive's own `md5Checksum`, no extra request). When the backend cannot supply a hash the line ends in `-` and one `HASH|missing|<n>` line appears, because a degraded fingerprint should look degraded. Same logic applies to delivery: `result` refuses to be a paragraph. `--artifact` writes file, folder, size and sha256 into the RESULT; `--no-artifact "<reason>"` is the only way out. A sentence in a chat is not a deliverable.
-
-## Limits
-
-- **Not real-time.** Latency equals your sync layer (seconds on Google Drive). Fine for tasks, useless for tight coordination.
-- **No authority.** A file saying "approved" is not an approval; `needs_owner_confirm` makes the gate impossible to skip, not attributable.
-- **No transactions.** Read-back verification and single ownership keep the odds low; two deliberate writers racing inside the same second can still both think they won.
-- **Do not store secrets.** `lint` recognises common key formats and fails loudly, but it is a smoke detector, not a vault.
-
-## Compatibility
-
-The naming follows a convention that has been running in production for months (`YYYY-MM-DD_TASK-<id>_<from>to<to>_<title>.md`, `_ACK_<agent>.md`, `STATUS_<agent>.md`), so an existing shared folder can be adopted as-is. Unrelated files and old-format notes are ignored, never modified.
-
-## Docs
-
-- [`docs/protocol.md`](docs/protocol.md) — the normative spec
-- [`docs/design-notes.md`](docs/design-notes.md) — why it is built this way, including the measurements
+Deeper docs: [`docs/protocol.md`](docs/protocol.md) (the specification),
+[`docs/design-notes.md`](docs/design-notes.md) (why it is built this way).
 
 ## About
 
-Built and maintained by **闷闷AI说** — a channel about AI news and hands-on tests. The tool exists because relaying tasks by hand between agents on different machines does not scale; a shared folder plus immutable events turned out to hold on any storage, so it became a project.
+Built by **闷闷AI说** — AI news, in Chinese, without the hype.
 
 - YouTube: <https://www.youtube.com/@menmenAI>
 - Bilibili: <https://space.bilibili.com/34234499>
