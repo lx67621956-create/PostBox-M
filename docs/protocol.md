@@ -316,3 +316,25 @@ Git specifics worth knowing before you debug a mailbox on a repository:
   and when — the only backend where "who did it" is independently provable.
 - A rejected push is not an error: it is the race being lost, and it surfaces as
   exit code 3 exactly like a duplicate ACK on Drive.
+
+## 16. Known limits — the contract
+
+These are not bugs waiting to be fixed. They are the price of using a folder, and
+they are part of the deal:
+
+- **No automatic reclamation.** If an agent claims a task and disappears, nothing
+  reassigns it. A folder has no clock everyone agrees on and no atomic
+  compare-and-swap, so a lease would produce two owners instead of one. Recovery is
+  explicit: a human writes `OWNER_OK`, or the owner writes a new task.
+- **At-least-once, not exactly-once.** A retried write can land twice on a backend
+  that does not dedupe. Ids and event names are derived from content and time, so a
+  duplicate is visible (`duplicate_id` in `lint`) and harmless — but it can exist.
+  There are no transactions in a folder.
+- **No authentication.** `from` is self-declared. The folder's ACL is the security
+  boundary: anyone who can write to the folder can impersonate an agent. `lint`
+  catches leaked secrets, not liars.
+- **Freshness is bounded by sync.** A task exists for the others only once the sync
+  client has uploaded it. Poll intervals must be longer than the sync delay, or the
+  same file will show up twice with different hashes.
+- **The viewer is a view.** `postbox serve` reads the folder and writes nothing; it
+  has no database, no session and no users. Stopping it loses nothing.

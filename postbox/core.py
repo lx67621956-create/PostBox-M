@@ -195,6 +195,9 @@ class Task:
             return None
         meta, body = parse_front_matter(text)
         sender, recipient = split_route(m.group("route"))
+        # The file name is slugged ("第-12-期"), the heading keeps the words the
+        # human typed. Prefer the heading: it is what people mean by the title.
+        heading = re.search(r"^#\s+(.+)$", body, re.M)
         return cls(
             path=name,
             task_id=m.group("id"),
@@ -202,7 +205,7 @@ class Task:
             route=m.group("route"),
             sender=meta.get("from") or sender,
             recipient=meta.get("to") or recipient,
-            title=m.group("title"),
+            title=(heading.group(1).strip() if heading else m.group("title")),
             urgent=bool(m.group("urgent")),
             meta=meta,
             body=body,

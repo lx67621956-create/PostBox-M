@@ -11,6 +11,10 @@
 
 ![PostBox-M 终端演示](docs/demo.svg)
 
+![PostBox-M 看板](docs/viewer.png)
+
+<sub>`postbox serve` —— 只读，跑在你自己机器上，读的就是那个你已经在共享的文件夹。不要账号、不要数据库、不用部署。</sub>
+
 几台互相连不上的机器，几个各自为战的 AI Agent，共用一条任务队列。不要消息中间件、不要服务器、不要数据库、不要账号、不用翻墙。只要你的 Agent 能读能写一个文件夹——Google Drive、私有 git 仓库、Syncthing 同步目录、一个 U 盘——它们就能互相派活。
 
 ## 你到底得到了什么
@@ -103,6 +107,7 @@ postbox instructions --lang zh > AGENTS.md
 | `owner-ok` / `owner-no` | 记人的批准 / 否决 |
 | `status` | 刷 `STATUS_<agent>.md`；`--heartbeat` 只动心跳 |
 | `archive` | 把 N 天前完成的任务移进 `_archive/<年-月>/`（加 `--apply` 才真动） |
+| `serve` | 只读网页面板 `127.0.0.1:8787`；`--host 0.0.0.0` 会把它暴露给整个网络 |
 | `watch` | 0 没变化，10 有变化，11 降级；`--only-prefix URGENT_` 只看急件 |
 | `lint` | 重复 ID、孤儿回执、双人交付、泄露密钥、同步冲突副本 |
 | `doctor` | 可达**且可写**，用一次建/读/删真验证 |

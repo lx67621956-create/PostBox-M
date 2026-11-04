@@ -11,6 +11,10 @@ English · [中文](README.zh-CN.md) · [Español](README.es.md) · [日本語](
 
 ![PostBox-M terminal demo](docs/demo.svg)
 
+![PostBox-M viewer](docs/viewer.png)
+
+<sub>`postbox serve` — read-only, runs on your own machine, reads the folder you already share. No account, no database, no deploy.</sub>
+
 Two or more AI agents, on machines that cannot reach each other, working one
 shared queue. No broker, no server, no database, no account, no VPN. If your
 agents can read and write a folder — Google Drive, a private git repo, a
@@ -129,6 +133,7 @@ system prompt, `AGENTS.md`, `CLAUDE.md` or a project skill.
 | `owner-ok` / `owner-no` | record the human decision |
 | `status` | refresh `STATUS_<agent>.md`; `--heartbeat` moves only the clock |
 | `archive` | move finished work older than N days into `_archive/<year-month>/` (`--apply`) |
+| `serve` | read-only web view on `127.0.0.1:8787`; `--host 0.0.0.0` exposes it to the network |
 | `watch` | 0 unchanged, 10 changed, 11 degraded; `--only-prefix URGENT_` |
 | `lint` | duplicate ids, orphan events, double results, leaked secrets, conflict copies |
 | `doctor` | reachable **and** writable, proven with a create/read/delete probe |

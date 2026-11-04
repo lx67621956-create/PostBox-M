@@ -734,6 +734,12 @@ def cmd_archive(args) -> int:
     return EXIT_OK
 
 
+def cmd_serve(args) -> int:
+    from .serve import serve
+    return serve(args.cfg, host=args.host, port=args.port,
+                 open_browser=args.open, sla_hours=args.cfg.sla_hours)
+
+
 def cmd_doctor(args) -> int:
     cfg = args.cfg
     problems = 0
@@ -901,6 +907,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("doctor", help="is this checkout able to talk?")
     p.set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("serve", help="read-only web view of the mailbox (localhost only)")
+    p.add_argument("--port", type=int, default=8787)
+    p.add_argument("--host", default="127.0.0.1",
+                   help="127.0.0.1 by default; anything else exposes your tasks to that network")
+    p.add_argument("--open", action="store_true", help="open a browser window")
+    p.set_defaults(func=cmd_serve)
 
     p = sub.add_parser("archive", help="move finished tasks older than N days out of the live queue")
     p.add_argument("--days", type=int, default=30)
