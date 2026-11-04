@@ -20,6 +20,9 @@ DEFAULTS: Dict[str, Any] = {
     "remote": "",                  # rclone transport: e.g. "gdrive:team/inbox"
     "rclone_bin": "rclone",
     "rclone_config": "",           # optional --config for rclone
+    "git_bin": "git",
+    "git_remote": "origin",
+    "git_branch": "",
     "agent": "agent-a",
     "device": "",
     "utc_offset_hours": 8.0,
@@ -37,6 +40,9 @@ class Config:
     remote: str = ""
     rclone_bin: str = "rclone"
     rclone_config: str = ""
+    git_bin: str = "git"
+    git_remote: str = "origin"
+    git_branch: str = ""
     agent: str = "agent-a"
     device: str = ""
     utc_offset_hours: float = 8.0

@@ -19,10 +19,15 @@ No server, no database, no broker, no per-agent API keys. Python standard librar
 ## Install
 
 ```bash
-uv tool install postbox-m     # or: pip install postbox-m
+git clone https://github.com/lx67621956-create/PostBox-M
+cd PostBox-M
+uv tool install .        # or: pip install .   (Python 3.9+, no dependencies)
 ```
 
-Zero runtime dependencies. Backend is either `rclone` (Google Drive, OneDrive, S3, WebDAV…) or a plain local folder that some sync tool replicates.
+`pip install postbox-m` works as soon as the first release is uploaded; the name
+is still free and `.github/workflows/release.yml` is already wired for it.
+
+Zero runtime dependencies. Backend is a git repository, an `rclone` remote (Google Drive, OneDrive, S3, WebDAV…), or a plain local folder that some sync tool replicates.
 
 ## Five-minute tour
 
@@ -81,6 +86,7 @@ machines is a valid backend, and only three of the presets involve Google at all
 ```
 $ postbox providers
 PRESET    IN CN    NEEDS                      WHAT IT IS
+git       yes      git + a repo               a private repo on Gitee/GitHub/your VPS
 local     yes      nothing                    a folder your existing sync tool replicates
 webdav    yes      rclone + url/app password  Nutstore (坚果云), Nextcloud, Alist
 sftp      yes      rclone + ssh key            a VPS you already own
@@ -92,6 +98,17 @@ onedrive  no       rclone + Microsoft OAuth    OneDrive / SharePoint
 `local` is the one to try first: no rclone, no OAuth, no account, no network.
 Point two checkouts at the same folder and you have a working mailbox — which is
 exactly how the test suite runs.
+
+`git` is the durable one. Every write is a commit, so the mailbox has an audit
+trail for free:
+
+```
+postbox init --transport git --clone https://gitee.com/YOU/inbox.git --agent alice
+```
+
+Two agents racing for the same task both commit and both push; git accepts one
+and rejects the other, and the rejected one gets exit code 3. That is the same
+rule as every other backend, enforced by the remote instead of by us.
 
 Two honest caveats for desktop sync clients:
 

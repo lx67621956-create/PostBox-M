@@ -17,10 +17,14 @@
 ## 安装
 
 ```bash
-uv tool install postbox-m     # 或 pip install postbox-m
+git clone https://github.com/lx67621956-create/PostBox-M
+cd PostBox-M
+uv tool install .        # 或：pip install .    （Python 3.9+，零依赖）
 ```
 
-零 Python 依赖，只用标准库。网盘走 rclone（已在用的不用重配 OAuth），或者干脆用本地目录 + Syncthing / 坚果云 / Dropbox / iCloud / U 盘。
+`pip install postbox-m` 要等第一个 release 传上去才有效——名字还没被占，`.github/workflows/release.yml` 已经配好了。
+
+零 Python 依赖，只用标准库。后端三种：git 仓库、rclone 远端（Google Drive / OneDrive / S3 / WebDAV…）、或者干脆一个本地目录 + Syncthing / 坚果云 / Dropbox / iCloud / U 盘。
 
 ## 五分钟跑通
 
@@ -91,6 +95,7 @@ postbox init --transport local --path /path/to/shared-folder --agent alice
 ```
 $ postbox providers
 PRESET    IN CN    NEEDS                      WHAT IT IS
+git       yes      git + 一个仓库               Gitee/GitHub/自己 VPS 上的私有仓库
 local     yes      nothing                    你现有的同步工具在同步的那个文件夹
 webdav    yes      rclone + 地址/应用密码       坚果云、Nextcloud、Alist
 sftp      yes      rclone + ssh key            你自己那台 VPS
@@ -100,6 +105,14 @@ onedrive  no       rclone + Microsoft OAuth    OneDrive
 ```
 
 **新人第一条路是 `local`**：不装 rclone、不做 OAuth、不注册账号、不需要网络。两个 checkout 指向同一个文件夹，邮箱就成立了——测试套件就是这么跑的。
+
+**最耐用的是 `git`**：每次写入就是一个 commit，天然有审计轨迹，还完全不碰 Google。
+
+```
+postbox init --transport git --clone https://gitee.com/你/inbox.git --agent alice
+```
+
+两个 Agent 抢同一个任务时会各自 commit、各自 push，git 只收一个，被拒的那个拿到退出码 3——跟其他后端同一条规则，只是这次由远端来判决，而不是靠我们。
 
 用桌面同步客户端要老实认两件事：
 

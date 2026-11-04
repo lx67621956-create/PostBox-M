@@ -293,3 +293,26 @@ facts, learned the hard way:
 Do not put client ids, secrets or tokens in a task file, a STATUS file, a RESULT,
 or a chat message. `lint` will flag assignments that look like secrets, but it is
 a smoke detector.
+
+## 15. Backends
+
+The four primitives of §4 are the whole contract. Three backends implement them,
+and the protocol does not care which one is in use:
+
+| backend | list | create-if-absent | who decides the race |
+|---|---|---|---|
+| `local` | directory walk | `O_CREAT\|O_EXCL` | the filesystem |
+| `rclone` | `lsjson --hash` | exists-check, write, read back | we do (Drive has no atomic create) |
+| `git` | `pull --rebase`, then walk | commit, push | the remote — one push wins, the other is rejected |
+
+Git specifics worth knowing before you debug a mailbox on a repository:
+
+- `mtime` is reported as `-`. A checkout's mtime changes on every clone and every
+  pull, so reporting it would make an unchanged mailbox look changed. The hash is
+  the file's content hash, which is stable across machines.
+- `core.autocrlf` is forced to `false` for the mailbox checkout. A CRLF rewrite
+  would change every hash in the folder and turn a quiet mailbox into a noisy one.
+- One write is one commit, so `git log` is a free audit trail of who claimed what
+  and when — the only backend where "who did it" is independently provable.
+- A rejected push is not an error: it is the race being lost, and it surfaces as
+  exit code 3 exactly like a duplicate ACK on Drive.

@@ -328,6 +328,229 @@ class RcloneTransport(Transport):
 
 
 # --------------------------------------------------------------------------
+class GitTransport(Transport):
+    """A git repository as the mailbox — GitHub, Gitee, GitLab, or a bare repo on a VPS.
+
+    A checkout is a normal working tree. Every write is one commit and one push;
+    every listing starts with a rebase-pull. The protocol never edits a file after
+    creation, so merges cannot conflict — the only race left is two agents creating
+    the same name, and that is settled by whoever pushes first. The loser gets a
+    ConflictError and backs off, exactly like the rclone backend.
+
+    The reported mtime is `-` on purpose: a checkout's mtime changes on every clone
+    and every pull, so it would make an unchanged mailbox look changed. The md5 is
+    the file's content hash, which is stable across machines.
+    """
+
+    kind = "git"
+
+    def __init__(self, root: str, git_bin: str = "git", remote: str = "origin",
+                 branch: str = "", timeout: int = 60):
+        self.root = os.path.abspath(root)
+        self.git_bin = git_bin or "git"
+        self.remote = remote or "origin"
+        self.branch = branch
+        self.timeout = timeout
+        if not os.path.isdir(os.path.join(self.root, ".git")):
+            raise TransportError(
+                "%s is not a git checkout — clone the mailbox repo there first" % self.root)
+        self._prepare_repo()
+
+    # ---- plumbing -------------------------------------------------------
+    def _git(self, *args, **kw):
+        cmd = [self.git_bin, "-C", self.root] + [str(a) for a in args]
+        env = os.environ.copy()
+        env["GIT_TERMINAL_PROMPT"] = "0"     # never block on a password prompt
+        env.setdefault("GIT_ASKPASS", "echo")
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace", env=env,
+                                  timeout=kw.get("timeout", self.timeout))
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise TransportError("git %s failed: %s" % (args[0], exc))
+
+    def _check(self, proc, what):
+        if proc.returncode != 0:
+            raise TransportError("git %s failed (%d): %s"
+                                 % (what, proc.returncode,
+                                    (proc.stderr or proc.stdout).strip()[:300]))
+        return proc
+
+    def _prepare_repo(self) -> None:
+        """Repo-local settings only — never touch the user's global git config."""
+        for key, value in (("user.name", "postbox"), ("user.email", "postbox@localhost")):
+            if not self._git("config", key).stdout.strip():
+                self._git("config", key, value)
+        # a mailbox is data: line endings must not be rewritten on checkout.
+        if self._git("config", "core.autocrlf").stdout.strip().lower() != "false":
+            self._git("config", "core.autocrlf", "false")
+            # a clone made with autocrlf=true left CRLF in the tree while the index holds
+            # LF. Rewrite the tree from the index, but only when that is the entire diff.
+            dirty = self._git("diff", "--quiet").returncode != 0
+            only_cr = self._git("diff", "--ignore-cr-at-eol", "--quiet").returncode == 0
+            if dirty and only_cr:
+                self._git("checkout", "--", ".")
+
+    def _head(self) -> str:
+        if self.branch:
+            return self.branch
+        proc = self._git("rev-parse", "--abbrev-ref", "HEAD")
+        if proc.returncode == 0:
+            branch = proc.stdout.strip()
+            if branch and branch != "HEAD":
+                return branch
+        # a freshly initialised repo has no commit yet: ask the symbolic ref instead
+        proc = self._git("symbolic-ref", "--short", "HEAD")
+        if proc.returncode == 0 and proc.stdout.strip():
+            return proc.stdout.strip()
+        raise TransportError("cannot determine the branch of %s" % self.root)
+
+    def _pull(self) -> None:
+        branch = self._head()
+        proc = self._git("pull", "--rebase", "--quiet", self.remote, branch)
+        if proc.returncode == 0:
+            return
+        msg = (proc.stderr or proc.stdout).strip()[:300]
+        if "couldn't find remote ref" in msg or "no such ref" in msg:
+            return                      # brand-new empty mailbox: nothing to pull yet
+        self._git("rebase", "--abort")
+        raise TransportError("git pull --rebase failed: %s" % msg)
+
+    def _commit(self, message: str) -> None:
+        self._git("add", "-A")
+        proc = self._git("-c", "commit.gpgsign=false", "commit", "-q", "-m", message)
+        if proc.returncode != 0 and "nothing to commit" not in (proc.stdout + proc.stderr):
+            raise TransportError("git commit failed: %s"
+                                 % (proc.stderr or proc.stdout).strip()[:300])
+
+    def _push(self):
+        branch = self._head()
+        proc = self._git("push", "--quiet", self.remote, "HEAD:%s" % branch)
+        return proc.returncode == 0, (proc.stderr or proc.stdout).strip()[:300]
+
+    def _reset_to_remote(self) -> None:
+        """Give up on our unpushed commit after losing a race."""
+        branch = self._head()
+        self._git("fetch", "--quiet", self.remote)
+        self._git("reset", "--hard", "--quiet", "%s/%s" % (self.remote, branch))
+
+    def _abs(self, name: str) -> str:
+        name = name.replace("\\", "/").lstrip("/")
+        target = os.path.normpath(os.path.join(self.root, name))
+        if not (target == self.root or target.startswith(self.root + os.sep)):
+            raise TransportError("path escapes mailbox root: %r" % name)
+        return target
+
+    # ---- transport surface ---------------------------------------------
+    def list(self, sub: str = "", recursive: bool = False,
+             with_hash: bool = False) -> List[RemoteFile]:
+        self._pull()
+        base = self._abs(sub) if sub else self.root
+        out: List[RemoteFile] = []
+        if not os.path.isdir(base):
+            return out
+        for dirpath, dirs, files in os.walk(base):
+            dirs[:] = [d for d in dirs if d != ".git"]
+            for name in files:
+                full = os.path.join(dirpath, name)
+                rel = os.path.relpath(full, self.root).replace("\\", "/")
+                try:
+                    with open(full, "rb") as fh:
+                        data = fh.read()
+                except OSError:
+                    continue
+                out.append(RemoteFile(name=rel, size=len(data), mtime="-",
+                                      md5=hashlib.md5(data).hexdigest()))
+            if not recursive:
+                break
+        out.sort(key=lambda f: f.name)
+        return out
+
+    def read(self, name: str) -> bytes:
+        path = self._abs(name)
+        try:
+            with open(path, "rb") as fh:
+                return fh.read()
+        except OSError:
+            # a miss may just mean "the other agent pushed since our last pull"
+            self._pull()
+            try:
+                with open(path, "rb") as fh:
+                    return fh.read()
+            except OSError:
+                raise FileNotFoundError(name) from None
+
+    def exists(self, name: str) -> bool:
+        return os.path.isfile(self._abs(name))
+
+    def create(self, name: str, data: bytes) -> bool:
+        self._pull()
+        target = self._abs(name)
+        if os.path.exists(target):
+            raise ConflictError(name)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "wb") as fh:
+            fh.write(data)
+        self._commit("postbox: add %s" % name)
+        ok, _err = self._push()
+        if ok:
+            return True
+        # somebody pushed first; rebase, then find out who owns the name now
+        proc = self._git("pull", "--rebase", "--quiet", self.remote, self._head())
+        if proc.returncode != 0:
+            self._git("rebase", "--abort")
+            self._reset_to_remote()
+            raise ConflictError(name)
+        try:
+            current = self.read(name)
+        except FileNotFoundError:
+            current = None
+        if current != data:
+            self._reset_to_remote()
+            raise ConflictError(name)
+        ok, err = self._push()
+        if not ok:
+            raise TransportError("git push failed after rebase: %s" % err)
+        return True
+
+    def replace(self, name: str, data: bytes) -> None:
+        self._pull()
+        target = self._abs(name)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "wb") as fh:
+            fh.write(data)
+        self._commit("postbox: update %s" % name)
+        ok, _err = self._push()
+        if ok:
+            return
+        proc = self._git("pull", "--rebase", "--quiet", self.remote, self._head())
+        if proc.returncode != 0:
+            self._git("rebase", "--abort")
+            raise ConflictError(name)
+        ok, err = self._push()
+        if not ok:
+            raise TransportError("git push failed after rebase: %s" % err)
+
+    def delete(self, name: str) -> None:
+        self._pull()
+        target = self._abs(name)
+        if not os.path.exists(target):
+            raise FileNotFoundError(name)
+        self._git("rm", "-q", "--", name)
+        self._commit("postbox: remove %s" % name)
+        ok, _err = self._push()
+        if ok:
+            return
+        proc = self._git("pull", "--rebase", "--quiet", self.remote, self._head())
+        if proc.returncode != 0:
+            self._git("rebase", "--abort")
+            raise ConflictError(name)
+        ok, err = self._push()
+        if not ok:
+            raise TransportError("git push failed after rebase: %s" % err)
+
+
+# --------------------------------------------------------------------------
 def _spill(data: bytes) -> str:
     fd, path = tempfile.mkstemp(prefix="postbox-", suffix=".tmp")
     try:
@@ -345,6 +568,11 @@ def _unlink(path: str) -> None:
 
 
 def build(cfg) -> Transport:
+    if cfg.transport == "git":
+        return GitTransport(cfg.resolve(cfg.path),
+                            getattr(cfg, "git_bin", "") or "git",
+                            getattr(cfg, "git_remote", "") or "origin",
+                            getattr(cfg, "git_branch", "") or "")
     if cfg.transport == "rclone":
         binary = cfg.rclone_bin or os.environ.get("POSTBOX_RCLONE_BIN") or "rclone"
         config = cfg.rclone_config or os.environ.get("POSTBOX_RCLONE_CONFIG") or ""

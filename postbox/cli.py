@@ -37,7 +37,8 @@ class Failure(Exception):
 # --------------------------------------------------------------------------
 def mailbox(cfg: Config) -> Mailbox:
     transport = build(cfg)
-    mirror = "" if cfg.transport == "local" else os.path.join(cfg.state_path, "mirror")
+    # only rclone needs a local mirror; a git checkout and a local folder are already local
+    mirror = os.path.join(cfg.state_path, "mirror") if cfg.transport == "rclone" else ""
     box = Mailbox(transport, mirror=mirror, cache=cfg.state_path)
     box.sync()
     return box
@@ -127,10 +128,28 @@ def cmd_init(args) -> int:
                  agent=core.slug(getattr(args, "agent", "") or "agent-a"),
                  device=getattr(args, "device", ""),
                  rclone_bin=getattr(args, "rclone_bin", ""),
-                 rclone_config=getattr(args, "rclone_config", ""))
+                 rclone_config=getattr(args, "rclone_config", ""),
+                 git_bin=getattr(args, "git_bin", "") or "git",
+                 git_branch=getattr(args, "git_branch", ""))
     if args.transport == "rclone" and not args.remote:
         raise Failure("--transport rclone needs --remote, e.g. --remote gdrive:agents/inbox",
                       EXIT_USAGE)
+    if args.transport == "git":
+        target = cfg.resolve(cfg.path)
+        clone_url = getattr(args, "clone", "") or ""
+        if clone_url and not os.path.isdir(os.path.join(target, ".git")):
+            parent = os.path.dirname(target)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            proc = subprocess.run([cfg.git_bin, "clone", "--quiet", clone_url, target],
+                                  capture_output=True, text=True)
+            if proc.returncode != 0:
+                raise Failure("git clone failed: %s"
+                              % (proc.stderr or proc.stdout).strip()[:300], EXIT_USAGE)
+        if not os.path.isdir(os.path.join(target, ".git")):
+            raise Failure(
+                "--transport git needs a checkout: --clone https://gitee.com/you/inbox.git "
+                "or --path to an existing clone", EXIT_USAGE)
     cfg.save()
     if args.transport == "local":
         os.makedirs(cfg.resolve(cfg.path), exist_ok=True)
@@ -518,6 +537,11 @@ def cmd_lint(args) -> int:
 
 
 PROVIDERS = [
+    {"preset": "git", "cn": "yes", "needs": "git + a repo (Gitee/GitHub/GitLab or a bare repo)",
+     "what": "A private repository as the mailbox. Every write is one commit, so there is a free "
+             "audit trail, and nothing touches Google. The most durable option.",
+     "init": 'postbox init --transport git --clone https://gitee.com/YOU/inbox.git --agent alice\n'
+             'postbox init --transport git --path /srv/inbox.git --agent bob'},
     {"preset": "local", "cn": "yes", "needs": "nothing (any folder your OS can see)",
      "what": "A folder that some sync tool replicates: Syncthing, Nutstore/坚果云 client, "
              "Dropbox, OneDrive, iCloud, a USB stick, a LAN share.",
@@ -692,11 +716,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("init", help="create .postbox/config.json and the mailbox")
     p.add_argument("--dir", default=None, help="checkout root (default: --root)")
     p.add_argument("--agent", default=argparse.SUPPRESS, help="this agent's name")
-    p.add_argument("--transport", default="local", choices=["local", "rclone"])
+    p.add_argument("--transport", default="local", choices=["local", "rclone", "git"])
     p.add_argument("--path", default="shared", help="local folder (relative to root)")
     p.add_argument("--remote", default="", help="rclone remote folder, e.g. gdrive:agents/inbox")
     p.add_argument("--rclone-bin", default="", help="path to rclone (default: PATH)")
     p.add_argument("--rclone-config", default="", help="path to rclone.conf")
+    p.add_argument("--clone", default="", help="git transport: clone this URL into --path")
+    p.add_argument("--git-bin", default="", help="path to git (default: PATH)")
+    p.add_argument("--git-branch", default="", help="git transport: branch (default: current)")
     p.add_argument("--device", default="")
     p.add_argument("--force", action="store_true")
     p.set_defaults(func=cmd_init)
