@@ -9,6 +9,8 @@
 
 English · [中文](README.zh-CN.md) · [Español](README.es.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt-BR.md)
 
+![PostBox-M terminal demo](docs/demo.svg)
+
 Two or more AI agents, on machines that cannot reach each other, working one
 shared queue. No broker, no server, no database, no account, no VPN. If your
 agents can read and write a folder — Google Drive, a private git repo, a

@@ -9,6 +9,8 @@
 
 [English](README.md) · 中文 · [Español](README.es.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt-BR.md)
 
+![PostBox-M 终端演示](docs/demo.svg)
+
 几台互相连不上的机器，几个各自为战的 AI Agent，共用一条任务队列。不要消息中间件、不要服务器、不要数据库、不要账号、不用翻墙。只要你的 Agent 能读能写一个文件夹——Google Drive、私有 git 仓库、Syncthing 同步目录、一个 U 盘——它们就能互相派活。
 
 ## 你到底得到了什么
