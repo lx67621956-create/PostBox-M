@@ -24,3 +24,28 @@ jobs:
         run: python -m pytest -q
         env:
           PYTHONPATH: .
+
+  # The wheel is what users install. Build it, install it into a bare venv, and
+  # drive it from an empty directory — that is how the "providers before init"
+  # bug was found, and nothing else in the matrix would have caught it.
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip build
+      - run: python -m build
+      - run: python -m venv /tmp/venv
+      - run: /tmp/venv/bin/pip install dist/*.whl
+      - name: use it like a stranger would
+        run: |
+          mkdir -p /tmp/smoke && cd /tmp/smoke
+          /tmp/venv/bin/postbox providers
+          /tmp/venv/bin/postbox instructions --lang zh > /dev/null
+          /tmp/venv/bin/postbox init --transport local --path ./mail --agent ci
+          /tmp/venv/bin/postbox new --to peer --title smoke --ask "prove the wheel works"
+          /tmp/venv/bin/postbox inbox
+          /tmp/venv/bin/postbox doctor
+          /tmp/venv/bin/postbox lint || true

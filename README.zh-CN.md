@@ -2,6 +2,11 @@
 
 **给 Agent 一个共享文件夹，基础设施就这么多。**
 
+[![test](https://github.com/lx67621956-create/PostBox-M/actions/workflows/test.yml/badge.svg)](https://github.com/lx67621956-create/PostBox-M/actions/workflows/test.yml)
+[![release](https://img.shields.io/github/v/release/lx67621956-create/PostBox-M)](https://github.com/lx67621956-create/PostBox-M/releases)
+[![python](https://img.shields.io/badge/python-3.9%2B-blue)](pyproject.toml)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 [English](README.md) · 中文 · [Español](README.es.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt-BR.md)
 
 几台互相连不上的机器，几个各自为战的 AI Agent，共用一条任务队列。不要消息中间件、不要服务器、不要数据库、不要账号、不用翻墙。只要你的 Agent 能读能写一个文件夹——Google Drive、私有 git 仓库、Syncthing 同步目录、一个 U 盘——它们就能互相派活。
@@ -78,6 +83,40 @@ postbox instructions --lang zh > AGENTS.md
 ```
 
 里面写清了循环（先认领再干活、交付要带清单）、硬规则（不许改别人的文件、不许写密钥），以及每个退出码的含义——哪个是"你抢输了"，哪个是"邮箱连不上"。粘进系统提示词、`AGENTS.md`、`CLAUDE.md` 或项目技能里都行。
+
+<details>
+<summary>全部命令</summary>
+
+| 命令 | 干什么 |
+|---|---|
+| `init` | 建 `.postbox/config.json` 和邮箱目录 |
+| `new` | 发任务（`--needs-owner` 要人批，`--urgent` 走 5 分钟急件通道） |
+| `dispatch tasks.json` | 从 JSON 一次派一批 |
+| `inbox` | 我要干的、等我批准的、我发出去的任务有新回复的 |
+| `ls` / `show` | 列表 / 单任务全貌（含全部事件） |
+| `ack` | 认领（3 = 已被抢，5 = 待批准） |
+| `note` | 记进度，不改状态 |
+| `result` | 交付：`--artifact` 生成清单和 sha256，或 `--no-artifact "理由"` |
+| `blocked` | 卡住了，写清在问谁什么 |
+| `owner-ok` / `owner-no` | 记人的批准 / 否决 |
+| `status` | 刷 `STATUS_<agent>.md`；`--heartbeat` 只动心跳 |
+| `watch` | 0 没变化，10 有变化，11 降级；`--only-prefix URGENT_` 只看急件 |
+| `lint` | 重复 ID、孤儿回执、双人交付、泄露密钥、同步冲突副本 |
+| `doctor` | 可达**且可写**，用一次建/读/删真验证 |
+| `providers` | 所有后端，标了国内可用，每条给现成命令 |
+| `instructions` | 给 Agent 的规矩（`--lang zh`） |
+
+退出码：`0` 正常、`2` 用法错、`3` 冲突、`4` 找不到、`5` 待批准、`6` lint 有错、`10` 有变化、`11` 降级。
+
+文件夹里，一个任务加两次回执就是三个 Markdown，路由信息在文件名里：
+
+```
+2026-11-02_TASK-20261102-1806-alice-to-bob-01_alice-to-bob_每周复盘.md
+                                                 ..._ACK_bob.md
+                                                 ..._RESULT_bob.md
+```
+
+</details>
 
 ## 两句实话
 

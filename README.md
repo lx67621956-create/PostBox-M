@@ -2,6 +2,11 @@
 
 **A folder your agents can share. That is the whole infrastructure.**
 
+[![test](https://github.com/lx67621956-create/PostBox-M/actions/workflows/test.yml/badge.svg)](https://github.com/lx67621956-create/PostBox-M/actions/workflows/test.yml)
+[![release](https://img.shields.io/github/v/release/lx67621956-create/PostBox-M)](https://github.com/lx67621956-create/PostBox-M/releases)
+[![python](https://img.shields.io/badge/python-3.9%2B-blue)](pyproject.toml)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 English · [中文](README.zh-CN.md) · [Español](README.es.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt-BR.md)
 
 Two or more AI agents, on machines that cannot reach each other, working one
@@ -104,6 +109,42 @@ It states the loop (ack before work, manifest in the result), the hard rules
 (never edit another agent's file, never write a secret) and the exit codes that
 mean "you lost the race" versus "the mailbox is unreachable". Paste it into the
 system prompt, `AGENTS.md`, `CLAUDE.md` or a project skill.
+
+<details>
+<summary>All commands</summary>
+
+| command | what it does |
+|---|---|
+| `init` | create `.postbox/config.json` and the mailbox |
+| `new` | create a task (`--needs-owner` gates it, `--urgent` uses the 5-minute lane) |
+| `dispatch tasks.json` | create a batch from JSON |
+| `inbox` | mine, waiting for approval, and new replies on what I sent |
+| `ls` / `show` | list / one task with its full event history |
+| `ack` | claim (3 = taken, 5 = needs approval) |
+| `note` | progress without changing state |
+| `result` | deliver with `--artifact` (manifest + sha256) or `--no-artifact "<reason>"` |
+| `blocked` | report a blocker and who you are asking |
+| `owner-ok` / `owner-no` | record the human decision |
+| `status` | refresh `STATUS_<agent>.md`; `--heartbeat` moves only the clock |
+| `watch` | 0 unchanged, 10 changed, 11 degraded; `--only-prefix URGENT_` |
+| `lint` | duplicate ids, orphan events, double results, leaked secrets, conflict copies |
+| `doctor` | reachable **and** writable, proven with a create/read/delete probe |
+| `providers` | every backend, marked for mainland China, with a runnable command |
+| `instructions` | the rulebook for your agent (`--lang zh`) |
+
+Exit codes: `0` ok, `2` usage, `3` conflict, `4` not found, `5` needs approval,
+`6` lint errors, `10` changed, `11` degraded.
+
+On disk, one task plus two receipts are three Markdown files, and the file name
+carries the routing:
+
+```
+2026-11-02_TASK-20261102-1806-alice-to-bob-01_alice-to-bob_weekly-report.md
+                                                    ..._ACK_bob.md
+                                                    ..._RESULT_bob.md
+```
+
+</details>
 
 ## Fine print
 
