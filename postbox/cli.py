@@ -266,7 +266,7 @@ def cmd_show(args) -> int:
     try:
         entry = box.get(args.task)
     except KeyError as exc:
-        raise Failure(str(exc), EXIT_NOTFOUND) from None
+        raise Failure(exc.args[0] if exc.args else str(exc), EXIT_NOTFOUND) from None
     if args.json:
         print(json.dumps(dump(entry), ensure_ascii=False, indent=2))
     else:
@@ -359,7 +359,7 @@ def _write_event(cfg: Config, task_id: str, kind: str, body: str, agent: str,
     try:
         entry = box.get(task_id)
     except KeyError as exc:
-        raise Failure(str(exc), EXIT_NOTFOUND) from None
+        raise Failure(exc.args[0] if exc.args else str(exc), EXIT_NOTFOUND) from None
     if entry.state == "done" and kind not in ("NOTE", "OWNER_OK", "OWNER_NO"):
         raise Failure("%s is already done — write a NOTE instead" % task_id, EXIT_CONFLICT)
     if gate and entry.task.needs_owner and not entry.events_of("OWNER_OK"):
@@ -389,7 +389,7 @@ def cmd_ack(args) -> int:
     try:
         entry = box.get(args.task)
     except KeyError as exc:
-        raise Failure(str(exc), EXIT_NOTFOUND) from None
+        raise Failure(exc.args[0] if exc.args else str(exc), EXIT_NOTFOUND) from None
     already = [e.agent for e in entry.events_of("ACK")]
     if cfg.agent in already:
         raise Failure("%s was already accepted by you (%s). Append a note instead."
@@ -749,7 +749,8 @@ def cmd_doctor(args) -> int:
             if t.read(probe) != b"probe":
                 raise TransportError("read-back mismatch")
             t.delete(probe)
-            print("writable  yes — create, read, delete all work")
+            print(i18n.tpl("writable  yes — create, read, delete all work",
+                       "可写      yes — 建/读/删都正常"))
         except (ConflictError, TransportError, FileNotFoundError, OSError) as exc:
             problems += 1
             print("writable  NO  — %s" % str(exc)[:200])
@@ -969,7 +970,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("%s: %s" % (i18n.tpl("transport", "传输"), i18n.tr(str(exc))), file=sys.stderr)
         return 1
     except KeyError as exc:
-        print("%s: %s" % (i18n.tpl("error", "错误"), i18n.tr(str(exc))), file=sys.stderr)
+        message = exc.args[0] if exc.args else str(exc)
+        print("%s: %s" % (i18n.tpl("error", "错误"), i18n.tr(str(message))), file=sys.stderr)
         return EXIT_NOTFOUND
 
 

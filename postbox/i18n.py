@@ -75,7 +75,7 @@ RULES: List[Tuple[str, str]] = [
     (r"^could not allocate a task id \(too many collisions\)$", "分配不到任务 ID（撞得太多）"),
     (r"^(.+) must contain a JSON array of tasks$", r"\1 里必须是任务的 JSON 数组"),
     (r"^every task needs 'to' and 'title': (.*)$", r"每个任务都要有 'to' 和 'title'：\1"),
-    (r"^(.+) requires --(.*)$", r"\1 需要 --\2"),
+    (r"^unknown task id: (.*)$", r"找不到这个任务：\1"),
 ]
 
 _COMPILED = [(re.compile(p), r) for p, r in RULES]
