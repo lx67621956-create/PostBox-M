@@ -7,9 +7,10 @@ import os
 import socket
 import sys
 import unicodedata
+from datetime import timedelta
 from typing import List, Optional
 
-from . import __version__, core
+from . import __version__, core, i18n
 from .config import Config
 from .lint import lint
 from .state import Entry, Ledger, Mailbox, derive_state
@@ -130,7 +131,8 @@ def cmd_init(args) -> int:
                  rclone_bin=getattr(args, "rclone_bin", ""),
                  rclone_config=getattr(args, "rclone_config", ""),
                  git_bin=getattr(args, "git_bin", "") or "git",
-                 git_branch=getattr(args, "git_branch", ""))
+                 git_branch=getattr(args, "git_branch", ""),
+                 lang=(getattr(args, "lang", "") or os.environ.get("POSTBOX_LANG", "")))
     if args.transport == "rclone" and not args.remote:
         raise Failure("--transport rclone needs --remote, e.g. --remote gdrive:agents/inbox",
                       EXIT_USAGE)
@@ -162,10 +164,11 @@ def cmd_init(args) -> int:
                                        "created by postbox init", core.fmt_ts(core.now(cfg.utc_offset_hours)))
         build(cfg).replace("STATUS_%s%s" % (core.slug(cfg.agent), core.MD),
                            cfg_bytes.encode("utf-8"))
-    print("initialised %s" % cfg_path)
-    print("mailbox   %s" % (cfg.remote or cfg.resolve(cfg.path)))
-    print("agent     %s" % cfg.agent)
-    print("next      postbox new --to <peer> --title \"...\" --ask \"...\"")
+    print(i18n.tpl("initialised %s", "已初始化 %s") % cfg_path)
+    print(i18n.tpl("mailbox   %s", "邮箱      %s") % (cfg.remote or cfg.resolve(cfg.path)))
+    print(i18n.tpl("agent     %s", "本机身份  %s") % cfg.agent)
+    print(i18n.tpl('next      postbox new --to <peer> --title "..." --ask "..."',
+                   '下一步    postbox new --to <对方> --title "..." --ask "..."'))
     return EXIT_OK
 
 
@@ -311,7 +314,7 @@ def cmd_inbox(args) -> int:
                          ensure_ascii=False, indent=2))
         return EXIT_OK
     if not work and not fresh and not hold:
-        print("nothing for %s" % me)
+        print(i18n.tpl("nothing for %s", "%s 这里没有待办") % me)
         return EXIT_OK
     if work:
         print("todo →")
@@ -672,6 +675,65 @@ def cmd_instructions(args) -> int:
     return EXIT_OK
 
 
+def cmd_archive(args) -> int:
+    """Move finished work out of the live queue into `_archive/<year-month>/`."""
+    cfg = args.cfg
+    box = mailbox(cfg)
+    transport = box.transport
+    cutoff = core.now(cfg.utc_offset_hours) - timedelta(days=max(args.days, 0))
+
+    picks = []
+    for entry in box.entries:
+        if entry.state != "done":
+            continue
+        stamp = core.parse_ts(entry.updated) or core.parse_ts(
+            entry.task.meta.get("created_at", ""))
+        if stamp is None or stamp > cutoff:
+            continue
+        prefix = entry.task.path[:-len(core.MD)]
+        names = [f.name.split("/")[-1] for f in box.files
+                 if f.name.split("/")[-1] == entry.task.path
+                 or f.name.split("/")[-1].startswith(prefix + "_")]
+        picks.append((stamp, entry.task.task_id, sorted(names)))
+
+    if not picks:
+        print(i18n.tpl("nothing to archive (no finished task older than %d days)",
+                       "没有可归档的（%d 天以前完成的才算）") % args.days)
+        return EXIT_OK
+
+    for stamp, task_id, names in picks:
+        month = stamp.strftime("%Y-%m")
+        if not args.apply:
+            if i18n.is_zh():
+                print("将移动 %s 的 %d 个文件 → _archive/%s/" % (task_id, len(names), month))
+            else:
+                print("would move %d file(s) of %s → _archive/%s/" % (len(names), task_id, month))
+            continue
+        for name in names:
+            target = "_archive/%s/%s" % (month, name)
+            try:
+                payload = transport.read(name)
+            except FileNotFoundError:
+                continue
+            if not transport.exists(target):
+                transport.create(target, payload)
+            else:
+                current = transport.read(target)
+                if current != payload:      # never overwrite archived evidence
+                    continue
+            transport.delete(name)
+
+    if args.apply:
+        total = sum(len(n) for _s, _t, n in picks)
+        if i18n.is_zh():
+            print("已归档 %d 个任务、%d 个文件" % (len(picks), total))
+        else:
+            print("archived %d task(s), %d file(s)" % (len(picks), total))
+    else:
+        print(i18n.tpl("dry run — add --apply to move them", "试运行 —— 加 --apply 才会真移动"))
+    return EXIT_OK
+
+
 def cmd_doctor(args) -> int:
     cfg = args.cfg
     problems = 0
@@ -680,7 +742,7 @@ def cmd_doctor(args) -> int:
     try:
         t = build(cfg)
         files = t.list()
-        print("reachable yes — %d object(s)" % len(files))
+        print(i18n.tpl("reachable yes — %d object(s)", "可达 yes — %d 个文件") % len(files))
         probe = ".postbox-write-probe-%d.md" % os.getpid()
         try:
             t.create(probe, b"probe")
@@ -716,6 +778,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--root", default=".", help="checkout holding .postbox/ (default: .)")
     parser.add_argument("--agent", default="", help="override the agent name from config")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
+    parser.add_argument("--lang", default="", choices=["", "en", "zh"],
+                        help="human output language (default: config 'lang', then English)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("init", help="create .postbox/config.json and the mailbox")
@@ -837,6 +901,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("doctor", help="is this checkout able to talk?")
     p.set_defaults(func=cmd_doctor)
 
+    p = sub.add_parser("archive", help="move finished tasks older than N days out of the live queue")
+    p.add_argument("--days", type=int, default=30)
+    p.add_argument("--apply", action="store_true",
+                   help="actually move them (default: dry run)")
+    p.set_defaults(func=cmd_archive)
+
     p = sub.add_parser("providers", help="storage backends that work, with the command for each")
     p.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
                    help="machine-readable output")
@@ -868,6 +938,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     _force_utf8()
     parser = build_parser()
     args = parser.parse_args(argv)
+    i18n.set_lang(getattr(args, "lang", "") or os.environ.get("POSTBOX_LANG", ""))
     try:
         if args.command in ("init", "providers", "instructions"):
             # these three must work before a mailbox exists: they are how you pick one
@@ -875,25 +946,30 @@ def main(argv: Optional[List[str]] = None) -> int:
             return args.func(args)
         cfg = Config.load(args.root)
         cfg.agent = core.slug(args.agent or cfg.agent, fallback="agent-a")
+        i18n.set_lang(getattr(args, "lang", "") or cfg.lang
+                      or os.environ.get("POSTBOX_LANG", ""))
         if args.command == "lint" and not args.sla:
             args.sla = cfg.sla_hours
     except FileNotFoundError as exc:
-        print("error: %s" % exc, file=sys.stderr)
+        print("%s: %s" % (i18n.tpl("error", "错误"), i18n.tr(str(exc))), file=sys.stderr)
         return EXIT_USAGE
     args.cfg = cfg
     try:
         return args.func(args)
     except Failure as exc:
-        print("error: %s" % exc, file=sys.stderr)
+        print("%s: %s" % (i18n.tpl("error", "错误"), i18n.tr(str(exc))), file=sys.stderr)
         return exc.code
     except ConflictError as exc:
-        print("conflict: %s (someone else got there first)" % exc, file=sys.stderr)
+        print("%s: %s %s"
+              % (i18n.tpl("conflict", "冲突"), i18n.tr(str(exc)),
+                 i18n.tpl("(someone else got there first)", "（别人先到了）")),
+              file=sys.stderr)
         return EXIT_CONFLICT
     except TransportError as exc:
-        print("transport: %s" % exc, file=sys.stderr)
+        print("%s: %s" % (i18n.tpl("transport", "传输"), i18n.tr(str(exc))), file=sys.stderr)
         return 1
     except KeyError as exc:
-        print("error: %s" % exc, file=sys.stderr)
+        print("%s: %s" % (i18n.tpl("error", "错误"), i18n.tr(str(exc))), file=sys.stderr)
         return EXIT_NOTFOUND
 
 

@@ -128,6 +128,7 @@ system prompt, `AGENTS.md`, `CLAUDE.md` or a project skill.
 | `blocked` | report a blocker and who you are asking |
 | `owner-ok` / `owner-no` | record the human decision |
 | `status` | refresh `STATUS_<agent>.md`; `--heartbeat` moves only the clock |
+| `archive` | move finished work older than N days into `_archive/<year-month>/` (`--apply`) |
 | `watch` | 0 unchanged, 10 changed, 11 degraded; `--only-prefix URGENT_` |
 | `lint` | duplicate ids, orphan events, double results, leaked secrets, conflict copies |
 | `doctor` | reachable **and** writable, proven with a create/read/delete probe |
@@ -156,7 +157,11 @@ desktop client writes `foo (1).md` beside `foo.md` — `lint` reports it, and th
 original is untouched because nothing in this system is ever rewritten in place.
 
 Deeper docs: [`docs/protocol.md`](docs/protocol.md) (the specification),
-[`docs/design-notes.md`](docs/design-notes.md) (why it is built this way).
+[`docs/design-notes.md`](docs/design-notes.md) (why it is built this way),
+[`docs/why.md`](docs/why.md) (when to use it, and when not to).
+
+Human output speaks Chinese too: `postbox --lang zh …`, or set `"lang": "zh"` once
+in `.postbox/config.json` and every later command follows.
 
 ## About
 

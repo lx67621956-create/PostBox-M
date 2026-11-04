@@ -102,6 +102,7 @@ postbox instructions --lang zh > AGENTS.md
 | `blocked` | 卡住了，写清在问谁什么 |
 | `owner-ok` / `owner-no` | 记人的批准 / 否决 |
 | `status` | 刷 `STATUS_<agent>.md`；`--heartbeat` 只动心跳 |
+| `archive` | 把 N 天前完成的任务移进 `_archive/<年-月>/`（加 `--apply` 才真动） |
 | `watch` | 0 没变化，10 有变化，11 降级；`--only-prefix URGENT_` 只看急件 |
 | `lint` | 重复 ID、孤儿回执、双人交付、泄露密钥、同步冲突副本 |
 | `doctor` | 可达**且可写**，用一次建/读/删真验证 |
@@ -124,7 +125,9 @@ postbox instructions --lang zh > AGENTS.md
 
 同步盘的文件夹是"同步到了才算"，轮询间隔要大于同步延迟；两个桌面客户端同时改同一个文件时会生成 `foo (1).md`，`lint` 会报出来——原文件不会被动，因为这个系统里没有任何东西会被原地改写。
 
-再深的东西在 [`docs/protocol.md`](docs/protocol.md)（规范）和 [`docs/design-notes.md`](docs/design-notes.md)（为什么这么设计）。
+再深的东西在 [`docs/protocol.md`](docs/protocol.md)（规范）、[`docs/design-notes.md`](docs/design-notes.md)（为什么这么设计）和 [`docs/why.md`](docs/why.md)（什么时候该用、什么时候别用）。
+
+输出语言：`postbox --lang zh`，或在 `.postbox/config.json` 里写一次 `"lang": "zh"`，之后所有命令都说中文（报错也翻）。
 
 ## 关于
 

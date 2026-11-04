@@ -26,6 +26,7 @@ DEFAULTS: Dict[str, Any] = {
     "agent": "agent-a",
     "device": "",
     "utc_offset_hours": 8.0,
+    "lang": "",                     # "" = English, "zh" = 中文
     "watch_paths": [".", "STATUS"],
     "sla_hours": 48,
     "state_dir": "",
@@ -46,6 +47,7 @@ class Config:
     agent: str = "agent-a"
     device: str = ""
     utc_offset_hours: float = 8.0
+    lang: str = ""
     watch_paths: List[str] = field(default_factory=lambda: ["."])
     sla_hours: int = 48
     state_dir: str = ""

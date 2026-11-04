@@ -61,6 +61,16 @@ def derive_state(task: Task, events: Iterable[Event]) -> str:
     return state
 
 
+def _archived(name: str) -> bool:
+    """`postbox archive` moves finished work into _archive/<year-month>/.
+
+    Archived files are still on disk (and still in git history), but they are no
+    longer part of the live queue: an archived task must not show up in `inbox`,
+    `ls` or `lint` a year later.
+    """
+    return "_archive" in name.split("/")[:-1]
+
+
 class Mailbox:
     """Local view of a shared folder.
 
@@ -81,7 +91,7 @@ class Mailbox:
     def sync(self) -> "Mailbox":
         if self.mirror and self.transport.kind != "local":
             self.transport.sync_to(self.mirror)
-        self.files = self._walk()
+        self.files = [f for f in self._walk() if not _archived(f.name)]
         self._parse()
         return self
 
