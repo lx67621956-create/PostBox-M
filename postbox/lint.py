@@ -49,16 +49,14 @@ def lint(mailbox: Mailbox, sla_hours: int = 48, now=None) -> List[Tuple[str, str
                         "%s exists %d times: %s" % (task_id, len(paths), ", ".join(paths))))
 
     # 2. events without a task
-    bases = {e.task.path[:-len(core.MD)] for e in mailbox.entries}
-    event_name = re.compile(
-        r"^(?P<base>.+)_(?P<kind>ACK|NOTE|RESULT|BLOCKED|QUESTION|OWNER_OK|OWNER_NO)"
-        r"_(?P<agent>[^_]+?)(?:_\d+)?\.md$")
+    bases = {core.task_key(e.task.path) for e in mailbox.entries}
+    agents = set(mailbox.statuses())
     for rf in mailbox.files:
         name = rf.name.split("/")[-1]
         if not name.endswith(core.MD) or name.startswith("STATUS_"):
             continue
-        match = event_name.match(name)
-        if match and match.group("base") not in bases:
+        key = core.task_key(name)
+        if key and core.looks_like_event(name, key, agents) and key not in bases:
             out.append(("warn", "orphan_event",
                         "%s looks like an event but no task matches it" % name))
 

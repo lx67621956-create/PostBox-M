@@ -64,7 +64,7 @@ def test_a_file_cut_in_half_by_a_crash_does_not_stop_the_queue(tmp_path):
 
 def test_an_event_whose_task_never_arrived_is_reported(tmp_path):
     roots, shared = init_agents(tmp_path)
-    ghost = os.path.join(shared, "20260101-0000-ghost-to-bob-01_ACK_bob.md")
+    ghost = os.path.join(shared, "2026-01-01_TASK-20260101-0000-ghost-to-bob-01_ACK_bob.md")
     with open(ghost, "w", encoding="utf-8") as fh:
         fh.write("---\ntask: 20260101-0000-ghost-to-bob-01\nkind: ACK\n---\nok\n")
 

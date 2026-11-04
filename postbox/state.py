@@ -122,53 +122,43 @@ class Mailbox:
             return ""
 
     def _parse(self) -> None:
-        # Pass 1: which files are tasks? A name can look like a task but be an
-        # event ("..._weekly_ACK_bob.md" matches the task regex too), and a
-        # hand-written note can look like anything. The front matter decides:
-        # a task declares its own id (or a from/to route).
-        candidates = []
+        # Everything that belongs to one task shares the key `<date>_TASK-<id>`.
+        # Real mailboxes hang events off the id rather than off the task file name,
+        # so grouping by the id is the only rule that fits both conventions.
+        agents = set(self.statuses())
+        groups: Dict[str, List] = {}
         for rf in self.files:
             name = rf.name.split("/")[-1]
             if not name.endswith(core.MD) or name.startswith("STATUS_"):
                 continue
-            if core.TASK_RE.match(name) is None:
-                continue
-            meta, _body = core.parse_front_matter(self._read_text(rf.name))
-            if "id" in meta or ("from" in meta and "to" in meta):
-                candidates.append(rf)
-        cand_names = {rf.name for rf in candidates}
-        task_files = []
-        for rf in candidates:
-            base = rf.name[:-len(core.MD)]
-            if any(other.name != rf.name and base.startswith(other.name[:-len(core.MD)] + "_")
-                   for other in candidates):
-                continue                     # it is an event hanging off another task
-            task_files.append(rf)
+            key = core.task_key(name)
+            if key:
+                groups.setdefault(key, []).append(rf)
 
         tasks: List[Task] = []
-        for rf in task_files:
-            text = self._read_text(rf.name)
-            task = Task.parse(rf.name.split("/")[-1], text)
+        events: Dict[str, List[Event]] = {}
+        for key, files in groups.items():
+            plain = [rf for rf in files
+                     if not core.looks_like_event(rf.name.split("/")[-1], key, agents)]
+            if not plain:
+                continue          # an event whose task never arrived: lint reports it
+            chosen = sorted(plain, key=lambda rf: len(rf.name))[0]
+            task = Task.parse(chosen.name.split("/")[-1], self._read_text(chosen.name))
             if task is None:
                 continue
-            task.size = rf.size
-            task.mtime = rf.mtime
+            task.size = chosen.size
+            task.mtime = chosen.mtime
             tasks.append(task)
-
-        bases = sorted((t.path for t in tasks), key=len, reverse=True)
-        events: Dict[str, List[Event]] = {t.path: [] for t in tasks}
-        for rf in self.files:
-            name = rf.name.split("/")[-1]
-            if not name.endswith(core.MD) or name.startswith("STATUS_"):
-                continue
-            owner = next((b for b in bases if name.startswith(b[:-len(core.MD)] + "_")), None)
-            if owner is None:
-                continue
-            text = self._read_text(rf.name)
-            event = Event.parse(name, owner, text)
-            event.size = rf.size
-            event.mtime = rf.mtime
-            events[owner].append(event)
+            bucket: List[Event] = []
+            for rf in files:
+                if rf.name == chosen.name:
+                    continue
+                name = rf.name.split("/")[-1]
+                event = Event.parse(name, key, self._read_text(rf.name))
+                event.size = rf.size
+                event.mtime = rf.mtime
+                bucket.append(event)
+            events[task.path] = bucket
         self.entries = []
         for task in tasks:
             evs = sorted(events.get(task.path, []), key=lambda e: (e.mtime, e.path))

@@ -16,11 +16,40 @@ from typing import Dict, List, Optional, Tuple
 MD = ".md"
 _BAD_PATH_CHARS = set('/\\:*?"<>|\t\r\n')
 TASK_RE = re.compile(
-    r"^(?:(?P<urgent>URGENT)_)?(?P<date>\d{4}-\d{2}-\d{2})_TASK-(?P<id>[^_]+)_(?P<route>[^_]+)_(?P<title>.+?)"
+    r"^(?:(?P<urgent>URGENT)_)?(?P<date>\d{4}-\d{2}-\d{2})_TASK-(?P<id>[^_]+)_(?P<rest>.+?)"
     + re.escape(MD) + r"$"
 )
+# Everything that belongs to a task — the task file and every event — shares this
+# prefix. Real mailboxes hang events off the id, not off the full task file name, so
+# the key stops at the id: "2026-10-08_TASK-20261008-0040-jobs-to-xiaomi-01".
+TASK_KEY_RE = re.compile(r"^(?:URGENT_)?(?P<date>\d{4}-\d{2}-\d{2})_TASK-(?P<id>[^_]+)")
+EVENT_KIND_RE = re.compile(r"^(?:ACK|NOTE|RESULT|BLOCKED|QUESTION|OWNER_OK|OWNER_NO)\d*$")
 URGENT_PREFIX = "URGENT_"
 ROUTE_SEP_RE = re.compile(r"(-to-)|(给)")
+
+
+def task_key(name: str) -> str:
+    """`2026-10-08_TASK-<id>_标题.md` → `2026-10-08_TASK-<id>` (the group key)."""
+    match = TASK_KEY_RE.match(name)
+    return name[:match.end()] if match else ""
+
+
+def looks_like_event(name: str, key: str, agents=()) -> bool:
+    """An event is `<key>_<anything>_<KIND>[_<seq>]_<agent>.md`.
+
+    Real mailboxes also write free-form replies ("..._补充_乔布斯.md"), where the
+    only clue is that the file ends with an agent name. Both count as events; a
+    task file is the one that is neither.
+    """
+    if not key or not name.startswith(key + "_"):
+        return False
+    rest = name[len(key) + 1: -len(MD)] if name.endswith(MD) else name[len(key) + 1:]
+    tokens = rest.split("_")
+    if len(tokens) < 2:
+        return False
+    if tokens[-1] in agents:
+        return True
+    return bool(EVENT_KIND_RE.match(tokens[-2]))
 
 # Event kinds the tool knows how to interpret. Anything else after a task base
 # (e.g. a hand-written "补充" note) is still an event, just a generic NOTE.
@@ -58,7 +87,14 @@ def fmt_ts(dt: datetime) -> str:
 
 def parse_ts(text: str) -> Optional[datetime]:
     text = (text or "").strip()
-    for fmt in ("%Y-%m-%d %H:%M:%S %z", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+    # Humans write "2026-11-04 23:56 Asia/Shanghai"; keep up with them.
+    for name, offset in (("Asia/Shanghai", "+0800"), ("Asia/Tokyo", "+0900"),
+                         ("UTC", "+0000"), ("GMT", "+0000")):
+        if text.endswith(name):
+            text = text[:-len(name)].rstrip() + " " + offset
+            break
+    for fmt in ("%Y-%m-%d %H:%M:%S %z", "%Y-%m-%d %H:%M %z",
+                "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
             dt = datetime.strptime(text, fmt)
             return dt if dt.tzinfo else dt.replace(tzinfo=tz(8))
@@ -194,7 +230,23 @@ class Task:
         if not m:
             return None
         meta, body = parse_front_matter(text)
-        sender, recipient = split_route(m.group("route"))
+        rest = m.group("rest")
+        route, title = "", rest
+        head, sep, tail = rest.partition("_")
+        if sep and ROUTE_SEP_RE.search(head):        # "<sender>-to-<recipient>_<title>"
+            route, title = head, tail
+        if route:
+            sender, recipient = split_route(route)
+        else:
+            sender = meta.get("from") or ""
+            recipient = meta.get("to") or ""
+            if not (sender and recipient):
+                # Old hand-written files have no front matter at all; the id still
+                # says who sent it to whom: "20261015-1142-xiaog-to-xiaomi-01".
+                from_id = re.search(r"([^/-]+)-to-([^-]+?)(?:-\d+)?$", m.group("id"))
+                if from_id:
+                    sender, recipient = from_id.group(1), from_id.group(2)
+            sender, recipient = sender or "?", recipient or "?"
         # The file name is slugged ("第-12-期"), the heading keeps the words the
         # human typed. Prefer the heading: it is what people mean by the title.
         heading = re.search(r"^#\s+(.+)$", body, re.M)
@@ -202,10 +254,11 @@ class Task:
             path=name,
             task_id=m.group("id"),
             date=m.group("date"),
-            route=m.group("route"),
+            route=route or "%s-to-%s" % (sender, recipient),
             sender=meta.get("from") or sender,
             recipient=meta.get("to") or recipient,
-            title=(heading.group(1).strip() if heading else m.group("title")),
+            title=(heading.group(1).strip() if heading
+                   else (meta.get("title") or title)),
             urgent=bool(m.group("urgent")),
             meta=meta,
             body=body,
@@ -228,9 +281,9 @@ class Event:
     sha: str = ""
 
     @classmethod
-    def parse(cls, path: str, task_path: str, text: str) -> "Event":
+    def parse(cls, path: str, base: str, text: str) -> "Event":
         name = os.path.basename(path.replace("\\", "/"))
-        base = task_path[:-len(MD)] if task_path.endswith(MD) else task_path
+        base = base[:-len(MD)] if base.endswith(MD) else base
         rest = name[len(base):]
         if rest.startswith("_"):
             rest = rest[1:]
@@ -245,7 +298,7 @@ class Event:
                 kind, seq = known, int(m.group(1) or 1)
                 break
         meta, body = parse_front_matter(text)
-        return cls(path=name, task_path=task_path, kind=kind, agent=agent, seq=seq,
+        return cls(path=name, task_path=base, kind=kind, agent=agent, seq=seq,
                    meta=meta, body=body, size=len(text.encode("utf-8")),
                    sha=sha256_bytes(text.encode("utf-8")))
 
