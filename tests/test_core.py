@@ -16,7 +16,7 @@ def test_task_id_and_filename_roundtrip(fixed_now):
     task_id = core.make_task_id("alice", "bob", fixed_now, 1)
     assert task_id == "20261102-0930-alice-to-bob-01"
     name = core.task_filename(task_id, "alice", "bob", "weekly-update", fixed_now)
-    assert name == "2026-11-02_TASK-20261102-0930-alice-to-bob-01_alice-to-bob_weekly-update.md"
+    assert name == "2026-11-02_TASK-20261102-0930-alice-to-bob-01_weekly-update.md"
 
     text = core.render_task(task_id, "alice", "bob", "weekly-update", "do it",
                             created_at=core.fmt_ts(fixed_now))
@@ -32,7 +32,7 @@ def test_event_naming_and_parsing(fixed_now):
     task_id = core.make_task_id("alice", "bob", fixed_now, 1)
     task_name = core.task_filename(task_id, "alice", "bob", "t", fixed_now)
     ack_name = core.event_filename(task_name, "ACK", "bob")
-    assert ack_name == "2026-11-02_TASK-%s_alice-to-bob_t_ACK_bob.md" % task_id
+    assert ack_name == "2026-11-02_TASK-%s_t_ACK_bob.md" % task_id
 
     text = core.render_event("ACK", "bob", core.fmt_ts(fixed_now), "on it")
     event = core.Event.parse(ack_name, task_name, text)

@@ -132,8 +132,10 @@ def make_task_id(sender: str, recipient: str, when: datetime, seq: int = 1) -> s
 def task_filename(task_id: str, sender: str, recipient: str, title: str, when: datetime,
                   urgent: bool = False) -> str:
     prefix = URGENT_PREFIX if urgent else ""
-    return "%s%s_TASK-%s_%s-to-%s_%s%s" % (
-        prefix, when.strftime("%Y-%m-%d"), task_id, slug(sender), slug(recipient), slug(title), MD)
+    # The mailbox that already exists names files "<date>_TASK-<id>_<title>.md"; the
+    # route lives inside the id. Keeping that shape is what lets other agents read us.
+    return "%s%s_TASK-%s_%s%s" % (
+        prefix, when.strftime("%Y-%m-%d"), task_id, slug(title), MD)
 
 
 def event_filename(task_filename_: str, kind: str, agent: str, n: Optional[int] = None) -> str:

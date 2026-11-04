@@ -177,7 +177,12 @@ class Mailbox:
         return entry
 
     def _match(self, fragment: str) -> Optional[Entry]:
-        hits = [e for e in self.entries if fragment in e.task.task_id]
+        # A tail match first: "-01" is the sequence number, while the same three
+        # characters also appear inside "20261102-0930". Only fall back to a loose
+        # substring when nothing ends with it, and never guess between two hits.
+        hits = [e for e in self.entries if e.task.task_id.endswith(fragment)]
+        if not hits:
+            hits = [e for e in self.entries if fragment in e.task.task_id]
         return hits[0] if len(hits) == 1 else None
 
     def statuses(self) -> Dict[str, Dict[str, str]]:
@@ -188,23 +193,25 @@ class Mailbox:
                 out[name[len("STATUS_"):-len(core.MD)]] = core.parse_status(self._read_text(rf.name))
         return out
 
-    def pending_for(self, agent: str) -> List[Entry]:
+    def pending_for(self, agent) -> List[Entry]:
+        names = {agent} if isinstance(agent, str) else set(agent)
         out = []
         for entry in self.entries:
-            if entry.task.recipient != agent:
+            if entry.task.recipient not in names:
                 continue
             if entry.state in ("done", "rejected"):
                 continue
             out.append(entry)
         return out
 
-    def replies_for(self, agent: str) -> List[Entry]:
+    def replies_for(self, agent) -> List[Entry]:
+        names = {agent} if isinstance(agent, str) else set(agent)
         out = []
         for entry in self.entries:
-            if entry.task.sender != agent:
+            if entry.task.sender not in names:
                 continue
             last = entry.last_event
-            if last is None or last.agent in (agent, "?"):
+            if last is None or last.agent in names or last.agent == "?":
                 continue
             out.append(entry)
         return out

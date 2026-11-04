@@ -244,7 +244,8 @@ def cmd_ls(args) -> int:
     if args.to:
         entries = [e for e in entries if e.task.recipient == args.to]
     if args.mine:
-        entries = [e for e in entries if args.mine in (e.task.recipient, e.task.sender)]
+        mine = _names(cfg, args.mine)
+        entries = [e for e in entries if e.task.recipient in mine or e.task.sender in mine]
     if not args.all:
         entries = [e for e in entries if e.state not in ("done", "rejected")]
     if args.json:
@@ -297,12 +298,21 @@ def cmd_show(args) -> int:
     return EXIT_OK
 
 
+def _names(cfg, override: str = "") -> set:
+    """Every name this agent answers to: the configured one plus its aliases."""
+    me = override or cfg.agent
+    names = {me, core.slug(me)}
+    names.update(getattr(cfg, "aliases", None) or [])
+    return {n for n in names if n}
+
+
 def cmd_inbox(args) -> int:
     cfg = args.cfg
     box = mailbox(cfg)
     me = args.agent or cfg.agent
-    todo = box.pending_for(me)
-    replies = box.replies_for(me)
+    names = _names(cfg, me)
+    todo = box.pending_for(names)
+    replies = box.replies_for(names)
     led = ledger(cfg)
     fresh = [e for e in replies if not led.is_seen(e.task.task_id, e.updated)]
     hold = [e for e in todo if e.state == "waiting_owner"]

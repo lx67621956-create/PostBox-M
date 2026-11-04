@@ -27,6 +27,7 @@ DEFAULTS: Dict[str, Any] = {
     "device": "",
     "utc_offset_hours": 8.0,
     "lang": "",                     # "" = English, "zh" = 中文
+    "aliases": [],                  # other names this agent answers to, e.g. ["xiaomi"]
     "watch_paths": [".", "STATUS"],
     "sla_hours": 48,
     "state_dir": "",
@@ -48,6 +49,7 @@ class Config:
     device: str = ""
     utc_offset_hours: float = 8.0
     lang: str = ""
+    aliases: List[str] = field(default_factory=list)
     watch_paths: List[str] = field(default_factory=lambda: ["."])
     sla_hours: int = 48
     state_dir: str = ""
