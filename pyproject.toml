@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "postbox-m"
 version = "0.6.2"
-description = "A shared folder as the message bus between autonomous agents."
+description = "Hand a job to another computer, wherever you are. Agents share one folder as a task queue; no server, no database, zero dependencies."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
