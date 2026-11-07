@@ -40,7 +40,7 @@ Google Drive、私有 git 仓库、WebDAV、SSH、S3、本地文件夹、U 盘�
 ## 安装
 
 ```bash
-pip install https://github.com/lx67621956-create/PostBox-M/releases/download/v0.4.0/postbox_m-0.4.0-py3-none-any.whl
+pip install "git+https://github.com/lx67621956-create/PostBox-M.git"
 ```
 
 从源码装：`git clone … && uv tool install .`

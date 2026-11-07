@@ -28,7 +28,7 @@ Python 표준 라이브러리만, 3.9 이상, 명령 하나. 빌드도 lockfile�
 ## 설치
 
 ```bash
-pip install https://github.com/lx67621956-create/PostBox-M/releases/download/v0.4.0/postbox_m-0.4.0-py3-none-any.whl
+pip install "git+https://github.com/lx67621956-create/PostBox-M.git"
 ```
 
 소스에서 설치: `git clone … && uv tool install .`

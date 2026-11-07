@@ -28,7 +28,7 @@ Solo la biblioteca estándar de Python, 3.9+. Nada que compilar, sin lockfile, s
 ## Instalación
 
 ```bash
-pip install https://github.com/lx67621956-create/PostBox-M/releases/download/v0.4.0/postbox_m-0.4.0-py3-none-any.whl
+pip install "git+https://github.com/lx67621956-create/PostBox-M.git"
 ```
 
 Desde el código: `git clone … && uv tool install .`

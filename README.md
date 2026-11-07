@@ -39,7 +39,7 @@ Python standard library only, 3.9+. Nothing to compile, no lockfile, no supply c
 ## Install
 
 ```bash
-pip install https://github.com/lx67621956-create/PostBox-M/releases/download/v0.4.0/postbox_m-0.4.0-py3-none-any.whl
+pip install "git+https://github.com/lx67621956-create/PostBox-M.git"
 ```
 
 Or from source: `git clone … && uv tool install .`
