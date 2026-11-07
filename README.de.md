@@ -1,54 +1,29 @@
 # PostBox-M
 
-**Ein Ordner, den deine Agenten teilen. Das ist die gesamte Infrastruktur.**
+**Einem anderen Rechner Arbeit geben, auch von unterwegs.**
 
 [English](README.md) · [中文](README.zh-CN.md) · [Español](README.es.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Français](README.fr.md) · Deutsch · [Português](README.pt-BR.md)
 
-Zwei oder mehr KI-Agenten auf Rechnern, die sich nicht erreichen können, arbeiten
-eine gemeinsame Warteschlange ab. Kein Broker, kein Server, keine Datenbank, kein
-Konto, kein VPN. Wenn deine Agenten einen Ordner lesen und schreiben können —
-Google Drive, ein privates Git-Repo, ein Syncthing-Paar, ein USB-Stick —, können
-sie einander Arbeit übergeben.
+Du bist unterwegs, nur ein Handy dabei. Du sagst dem Assistenten auf dem Handy: gib das dem Rechner zu Hause. Er tut es — an den Bürorechner in einer anderen Stadt, an die Maschine, die immer läuft, an den Desktop zu Hause. Der Rechner nimmt die Aufgabe, macht sie, behält die Datei lokal und schickt einen Lieferschein zurück: wo sie liegt, wie groß sie ist und ob sie passt.
+
+Wie das unterwegs läuft, ist nicht deine Sorge. Ein Ordner, den mehrere Rechner sehen, reicht: Google Drive, ein privates Git-Repo, Syncthing, ein USB-Stick. Kein Server, keine Datenbank, kein Konto, kein VPN.
 
 ## Was du tatsächlich bekommst
 
-**1. Nichts, was laufen muss.**
-Das Postfach *ist* ein Ordner. Kein Daemon zu deployen, kein Port zu öffnen, kein
-Token zu rotieren, kein Broker, der um 3 Uhr nachts am Leben gehalten werden muss.
-Existiert der Ordner, läuft das System. Die Infrastrukturrechnung für den
-Message-Bus ist null.
+**1. Leichtgewichtig.**
+Das Postfach ist ein Ordner. Kein Dauerprozess, keine Datenbank, nichts, was man nachts überwachen muss. Ein paar KB Text – lesbar, kopierbar, komplett mitnehmbar.
 
-**2. Ein Besitzer pro Aufgabe, erzwungen vom Dateisystem.**
-Eine Aufgabe übernehmen heißt `create-if-absent`. Sechs Agenten jagen dieselbe
-Aufgabe: genau einer bekommt sie, die anderen fünf enden mit Code 3 und treten
-zurück. Doppelarbeit hört auf, weil ein Agent die Datei **physisch nicht anlegen
-konnte** — nicht, weil sich zwei Agenten „geeinigt" haben.
+**2. Kein Server zum Ausrollen.**
+Kein Port, kein Konto, kein IT-Ticket, kein VPN. Ist der Ordner da, läuft das System; ist er weg, fällt auch nichts aus.
 
-**3. Nichts wird je überschrieben.**
-Eine Aufgabe wird einmal geschrieben und nie bearbeitet. Jede Aktion — Bestätigung,
-Notiz, Ergebnis, Blocker — ist eine neue Datei mit eindeutigem Namen. Die
-Geschichte einer Aufgabe ist damit strukturell vollständig, nicht durch Disziplin.
-Und mit dem Git-Backend beweist `git log` einem Dritten, wer wann was übernommen hat.
+**3. Viele Agenten, eine Warteschlange.**
+Mehrere Rechner und verschiedene KIs arbeiten dieselbe Warteschlange ab. Eine Aufgabe, ein Verantwortlicher: Übernehmen heißt eine Datei anzulegen, die es nicht gibt – sechs Agenten greifen zu, genau einer gewinnt, die anderen fünf gehen mit Code 3.
 
-**4. Polling kostet nichts, wenn nichts passiert ist.**
-`postbox watch` gibt byte-identische Ausgabe aus, solange der Ordner unverändert
-ist, und endet mit 0. Ein Cronjob vergleicht die Ausgabe — oder nur den Exit-Code —
-und überspringt den Modellaufruf komplett. Ein untätiger Agent kostet null Token
-und wacht nur auf, wenn es wirklich etwas Neues gibt.
+**4. Viele Speicher.**
+Google Drive, privates Git, WebDAV, SSH, S3, lokaler Ordner, USB-Stick – sieben Backends, dieselben Befehle. Nimm, was du schon hast.
 
-**5. Eine Lieferung ist eine Datei mit Hash, kein Satz.**
-`postbox result --artifact report.md` schreibt Datei, Ordner, Größe und sha256 in
-die Quittung. „Erledigt" im Chat ist keine Lieferung, und das Werkzeug lässt keinen
-Agenten sie als solche eintragen.
-
-**6. Läuft dort, wo du schon bist.**
-Ein privates Repo auf Gitee, ein Nutstore-WebDAV-Ordner, ein VPS per SSH, Google
-Drive, zwei Laptops im selben LAN. Niemand braucht ein Google-Konto, niemand ein
-VPN, niemand einen eingehenden Port.
-
-**7. Null Abhängigkeiten.**
-Nur die Python-Standardbibliothek, Python 3.9+, ein Befehl. Nichts zu kompilieren,
-kein Lockfile, keine Lieferkette zu prüfen.
+**5. Null Abhängigkeiten.**
+Nur Python-Standardbibliothek, 3.9+. Nichts zu kompilieren, kein Lockfile, keine Supply Chain zu prüfen.
 
 ## Installation
 

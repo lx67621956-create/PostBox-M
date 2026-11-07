@@ -1,52 +1,29 @@
 # PostBox-M
 
-**Uma pasta que seus agentes podem compartilhar. Essa é toda a infraestrutura.**
+**Dar trabalho a outro computador, mesmo de longe.**
 
 [English](README.md) · [中文](README.zh-CN.md) · [Español](README.es.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · Português
 
-Dois ou mais agentes de IA, em máquinas que não conseguem se comunicar, trabalhando
-uma fila compartilhada. Sem broker, sem servidor, sem banco de dados, sem conta, sem
-VPN. Se seus agentes sabem ler e escrever uma pasta — Google Drive, um repositório
-git privado, um par Syncthing, um pendrive —, eles conseguem passar trabalho entre si.
+Você está na rua, só com o celular. Diz ao assistente do celular: passa isso para a máquina de casa. E ele passa — para o computador do escritório em outra cidade, para o servidor que fica sempre ligado, para o desktop de casa. A máquina pega a tarefa, faz, deixa o arquivo onde está e devolve um recibo: onde ele vive, quanto pesa e se confere.
+
+Como ele chega lá não é problema seu. Basta uma pasta que várias máquinas enxerguem: Google Drive, um repositório git privado, Syncthing, um pendrive. Sem servidor, sem banco de dados, sem conta, sem VPN.
 
 ## O que você realmente ganha
 
-**1. Nada para manter no ar.**
-A caixa de entrada *é* uma pasta. Nenhum daemon para implantar, nenhuma porta para
-abrir, nenhum token para rotacionar, nenhum broker para manter vivo às 3 da manhã.
-Se a pasta existe, o sistema está funcionando. A conta de infraestrutura do barramento
-de mensagens é zero.
+**1. Leve.**
+A caixa de entrada é uma pasta. Sem processo residente, sem banco de dados, nada para vigiar de madrugada. Poucos KB de texto: dá para abrir, ler e levar inteiro.
 
-**2. Um dono por tarefa, garantido pelo sistema de arquivos.**
-Assumir um trabalho é `create-if-absent`. Seis agentes disputando a mesma tarefa:
-exatamente um consegue, os outros cinco saem com código 3 e recuam. O trabalho
-duplicado deixa de acontecer porque dois agentes "combinaram" — deixa porque um deles
-**fisicamente não conseguiu criar o arquivo**.
+**2. Sem servidor para implantar.**
+Não abre porta, não cria conta, não espera liberação do TI, não precisa de VPN. Se a pasta existe, o sistema está no ar; se não existe, nada quebra.
 
-**3. Nada é sobrescrito.**
-Uma tarefa é escrita uma vez e nunca editada. Cada ação — confirmação, nota, entrega,
-bloqueio — é um arquivo novo com nome único. O histórico de um trabalho fica completo
-por construção, não por disciplina; e no backend git, `git log` prova a um terceiro
-quem assumiu o quê e quando.
+**3. Vários agentes, uma fila.**
+Várias máquinas e IAs diferentes trabalham a mesma fila. Uma tarefa, um responsável: assumir é criar um arquivo que não existe; seis agentes disputam, exatamente um ganha, os outros cinco saem com código 3.
 
-**4. Sondar não custa nada quando nada aconteceu.**
-`postbox watch` imprime saída idêntica byte a byte enquanto a pasta não muda e sai
-com 0. Um cron compara a saída — ou só o código de saída — e pula totalmente a chamada
-ao modelo. Um agente ocioso custa zero token e só acorda quando há algo novo de verdade.
+**4. Vários armazenamentos.**
+Google Drive, git privado, WebDAV, SSH, S3, pasta local, pendrive: sete backends, os mesmos comandos. Use o que você já tem.
 
-**5. Uma entrega é um arquivo com hash, não uma frase.**
-`postbox result --artifact relatorio.md` grava arquivo, pasta, tamanho e sha256 no
-recibo. "Feito" dito no chat não é entrega, e a ferramenta não deixa um agente
-registrar isso como tal.
-
-**6. Roda onde você já está.**
-Um repositório privado no Gitee, uma pasta WebDAV do Nutstore, um VPS por SSH, Google
-Drive, dois notebooks na mesma LAN. Ninguém precisa de conta Google, de VPN nem de
-abrir porta de entrada.
-
-**7. Zero dependências.**
-Só a biblioteca padrão do Python, Python 3.9+, um comando. Nada para compilar, sem
-lockfile, sem cadeia de suprimentos para auditar.
+**5. Zero dependências.**
+Só a biblioteca padrão do Python, 3.9+. Nada para compilar, sem lockfile, sem cadeia de suprimentos para auditar.
 
 ## Instalação
 

@@ -1,6 +1,6 @@
 # PostBox-M
 
-**A folder your agents can share. That is the whole infrastructure.**
+**Give another computer a job while you are nowhere near it.**
 
 [![test](https://github.com/lx67621956-create/PostBox-M/actions/workflows/test.yml/badge.svg)](https://github.com/lx67621956-create/PostBox-M/actions/workflows/test.yml)
 [![release](https://img.shields.io/github/v/release/lx67621956-create/PostBox-M)](https://github.com/lx67621956-create/PostBox-M/releases)
@@ -15,49 +15,26 @@ English · [中文](README.zh-CN.md) · [Español](README.es.md) · [日本語](
 
 <sub>`postbox serve` — read-only, runs on your own machine, reads the folder you already share. No account, no database, no deploy.</sub>
 
-Two or more AI agents, on machines that cannot reach each other, working one
-shared queue. No broker, no server, no database, no account, no VPN. If your
-agents can read and write a folder — Google Drive, a private git repo, a
-Syncthing pair, a USB stick — they can hand work to each other.
+You are out, phone in hand. You tell the assistant on your phone: hand this to the machine at home. And it does — to the office computer in another city, to the box that is always on, to the desktop at home. That machine picks the task up, does the work, keeps the file where it is, and sends back a receipt: where it lives, how big it is, whether it matches.
+
+How it travels is not your problem. One folder that several machines can see is enough: Google Drive, a private git repo, Syncthing, a USB stick. No server, no database, no account, no VPN.
 
 ## What you actually get
 
-**1. Nothing to run.**
-The mailbox *is* a folder. No daemon to deploy, no port to open, no token to
-rotate, no broker to keep alive at 3am. If the folder exists, the system is up.
-Your infrastructure bill for the message bus is zero.
+**1. Lightweight.**
+The mailbox is a folder. No daemon, no database, nothing to watch at 3am. A few KB of text you can open, read, and copy away whole.
 
-**2. One owner per task, enforced by the filesystem.**
-Claiming a job is `create-if-absent`. Six agents racing for the same task:
-exactly one gets it, the other five exit with code 3 and back off. Double work
-stops happening because two agents "agreed" — it stops because one of them
-physically could not create the file.
+**2. No server to deploy.**
+No port to open, no account to create, no IT ticket, no VPN. If the folder exists the system is up; if it does not, nothing breaks either.
 
-**3. Nothing is ever overwritten.**
-A task is written once and never edited. Every action — ack, note, result,
-blocker — is a new file with a unique name. A job's history is therefore complete
-by construction, not by discipline, and on the git backend `git log` proves who
-claimed what and when, to a third party.
+**3. Many agents, one queue.**
+Several machines and several different AIs work the same queue. One task, one owner: claiming is create-if-absent — six agents race, exactly one wins, the other five exit with code 3.
 
-**4. Polling is free when nothing happened.**
-`postbox watch` prints byte-identical output while the folder is unchanged and
-exits 0. A cron job compares the output — or just the exit code — and skips the
-model call entirely. An idle agent costs zero tokens and only wakes when there is
-really something new.
+**4. Many storage backends.**
+Google Drive, private git, WebDAV, SSH, S3, a local folder, a USB stick — seven backends, one set of commands. Use whichever you already have.
 
-**5. A delivery is a file with a hash, not a sentence.**
-`postbox result --artifact report.md` writes file, folder, size and sha256 into
-the receipt. "Done" said in a chat is not a delivery, and the tool will not let
-an agent record it as one.
-
-**6. Runs where you already are.**
-A private repo on Gitee, a Nutstore WebDAV folder, a VPS over SSH, Google Drive,
-two laptops on the same LAN. Nobody needs a Google account, nobody needs a VPN,
-nobody needs to open an inbound port.
-
-**7. Zero dependencies.**
-Python standard library only, Python 3.9+, one command. Nothing to compile, no
-lockfile, no supply chain to audit.
+**5. Zero dependencies.**
+Python standard library only, 3.9+. Nothing to compile, no lockfile, no supply chain to audit.
 
 ## Install
 

@@ -1,33 +1,29 @@
 # PostBox-M
 
-**Una carpeta que tus agentes pueden compartir. Esa es toda la infraestructura.**
+**Dale trabajo a otra computadora aunque no estés cerca.**
 
 [English](README.md) · [中文](README.zh-CN.md) · Español · [日本語](README.ja.md) · [한국어](README.ko.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt-BR.md)
 
-Dos o más agentes de IA, en máquinas que no pueden comunicarse entre sí, trabajando una única cola compartida. Sin broker, sin servidor, sin base de datos, sin cuentas, sin VPN. Si tus agentes pueden leer y escribir una carpeta —Google Drive, un repositorio git privado, un par de Syncthing, un pendrive—, pueden pasarse trabajo entre ellos.
+Estás fuera, con el teléfono en la mano. Le dices al asistente del móvil: pásale esto a la máquina de casa. Y lo hace: a la computadora de la oficina en otra ciudad, al servidor que siempre está encendido, a la de casa. Esa máquina recoge la tarea, la hace, deja el archivo donde está y devuelve un recibo con dónde vive, cuánto pesa y si coincide.
+
+Cómo viaja no es tu problema. Basta con una carpeta que varias máquinas puedan ver: Google Drive, un repo git privado, Syncthing, un pendrive. Sin servidor, sin base de datos, sin cuentas, sin VPN.
 
 ## Lo que realmente obtienes
 
-**1. Nada que mantener en marcha.**
-El buzón *es* una carpeta. No hay demonio que desplegar, ni puerto que abrir, ni token que rotar, ni broker que mantener vivo a las 3 de la mañana. Si la carpeta existe, el sistema está operativo. El coste de infraestructura del bus de mensajes es cero.
+**1. Ligero.**
+El buzón es una carpeta. Sin proceso residente, sin base de datos, nada que vigilar de madrugada. Unos pocos KB de texto que puedes abrir, leer y llevarte entero.
 
-**2. Un solo dueño por tarea, garantizado por el sistema de archivos.**
-Reclamar un trabajo es `create-if-absent`. Seis agentes compitiendo por la misma tarea: exactamente uno la obtiene, los otros cinco salen con código 3 y se retiran. El trabajo duplicado no se evita porque dos agentes "se pusieron de acuerdo", sino porque uno de ellos **no pudo físicamente crear el archivo**.
+**2. Sin servidor que desplegar.**
+No abres puertos, no creas cuentas, no esperas permisos de TI, no necesitas VPN. Si la carpeta está, el sistema está; si no está, tampoco se cae nada.
 
-**3. Nada se sobrescribe nunca.**
-Una tarea se escribe una vez y no se edita jamás. Cada acción —confirmar, anotar, entregar, bloquear— es un archivo nuevo con un nombre único. El historial de un trabajo queda completo por construcción, no por disciplina; y con el backend git, `git log` demuestra ante un tercero quién reclamó qué y cuándo.
+**3. Varios agentes, una cola.**
+Varias máquinas y varios AI distintos trabajan la misma cola. Una tarea, un responsable: reclamar es crear un archivo que no existe; seis agentes compiten y exactamente uno gana, los otros cinco salen con código 3.
 
-**4. Sondear no cuesta nada cuando no ha pasado nada.**
-`postbox watch` imprime una salida idéntica byte a byte mientras la carpeta no cambia y sale con 0. Un cron compara la salida —o simplemente el código de salida— y se salta por completo la llamada al modelo. Un agente inactivo cuesta cero tokens y solo despierta cuando hay algo nuevo de verdad.
+**4. Varios almacenamientos.**
+Google Drive, git privado, WebDAV, SSH, S3, carpeta local, pendrive: siete backends, los mismos comandos. Usa el que ya tengas.
 
-**5. Una entrega es un archivo con hash, no una frase.**
-`postbox result --artifact report.md` escribe archivo, carpeta, tamaño y sha256 en el recibo. "Hecho" dicho en un chat no es una entrega, y la herramienta no permite que un agente lo registre como tal.
-
-**6. Funciona donde ya estás.**
-Un repositorio privado en Gitee, una carpeta WebDAV de Nutstore, un VPS por SSH, Google Drive, dos portátiles en la misma LAN. Nadie necesita una cuenta de Google, nadie necesita una VPN, nadie necesita abrir un puerto entrante.
-
-**7. Cero dependencias.**
-Solo la biblioteca estándar de Python, Python 3.9+, un comando. Nada que compilar, sin lockfile, sin cadena de suministro que auditar.
+**5. Cero dependencias.**
+Solo la biblioteca estándar de Python, 3.9+. Nada que compilar, sin lockfile, sin cadena de suministro que auditar.
 
 ## Instalación
 

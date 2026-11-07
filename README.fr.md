@@ -1,33 +1,29 @@
 # PostBox-M
 
-**Un dossier que vos agents peuvent partager. C'est toute l'infrastructure.**
+**Donner du travail à un autre ordinateur, même à distance.**
 
 [English](README.md) · [中文](README.zh-CN.md) · [Español](README.es.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · Français · [Deutsch](README.de.md) · [Português](README.pt-BR.md)
 
-Deux agents d'IA ou plus, sur des machines qui ne peuvent pas communiquer entre elles, travaillant une file d'attente commune. Pas de broker, pas de serveur, pas de base de données, pas de compte, pas de VPN. Si vos agents savent lire et écrire un dossier — Google Drive, un dépôt git privé, une paire Syncthing, une clé USB —, ils peuvent se passer du travail.
+Vous êtes dehors, juste un téléphone. Vous dites à l'assistant du téléphone : passe ça à la machine de la maison. Il le fait — à l'ordinateur du bureau dans une autre ville, au serveur toujours allumé, au poste de la maison. La machine prend la tâche, la fait, garde le fichier chez elle et renvoie un bordereau : où il est, sa taille, et s'il correspond.
+
+Le trajet ne vous regarde pas. Un dossier visible par plusieurs machines suffit : Google Drive, un dépôt git privé, Syncthing, une clé USB. Pas de serveur, pas de base de données, pas de compte, pas de VPN.
 
 ## Ce que vous obtenez réellement
 
-**1. Rien à faire tourner.**
-La boîte aux lettres *est* un dossier. Aucun démon à déployer, aucun port à ouvrir, aucun jeton à faire tourner, aucun broker à surveiller à 3 h du matin. Si le dossier existe, le système est en marche. Le coût d'infrastructure du bus de messages est nul.
+**1. Léger.**
+La boîte aux lettres, c'est un dossier. Pas de processus résident, pas de base de données, rien à surveiller à 3 h du matin. Quelques Ko de texte : lisible, copiable, transportable tel quel.
 
-**2. Un seul propriétaire par tâche, garanti par le système de fichiers.**
-Prendre une tâche, c'est `create-if-absent`. Six agents sur la même tâche : exactement un réussit, les cinq autres sortent avec le code 3 et se retirent. Le double travail disparaît non pas parce que deux agents « se sont mis d'accord », mais parce que l'un d'eux **n'a physiquement pas pu créer le fichier**.
+**2. Aucun serveur à déployer.**
+Pas de port à ouvrir, pas de compte à créer, pas de validation IT, pas de VPN. Si le dossier est là, le système tourne ; s'il n'est pas là, rien ne tombe.
 
-**3. Rien n'est jamais écrasé.**
-Une tâche est écrite une fois et jamais éditée. Chaque action — accusé, note, livraison, blocage — est un fichier nouveau au nom unique. L'historique d'un travail est donc complet par construction, pas par discipline ; et avec le backend git, `git log` prouve à un tiers qui a pris quoi et quand.
+**3. Plusieurs agents, une file.**
+Plusieurs machines et plusieurs IA différentes travaillent la même file. Une tâche, un responsable : prendre la tâche, c'est créer un fichier qui n'existe pas ; six agents se précipitent, un seul gagne, les cinq autres sortent avec le code 3.
 
-**4. Sonder ne coûte rien quand il ne s'est rien passé.**
-`postbox watch` imprime une sortie identique octet pour octet tant que le dossier ne change pas et sort avec 0. Un cron compare la sortie — ou juste le code de sortie — et saute entièrement l'appel au modèle. Un agent au repos coûte zéro jeton et ne se réveille que s'il y a vraiment du nouveau.
+**4. Plusieurs stockages.**
+Google Drive, git privé, WebDAV, SSH, S3, dossier local, clé USB : sept backends, les mêmes commandes. Prenez celui que vous avez déjà.
 
-**5. Une livraison est un fichier avec un hash, pas une phrase.**
-`postbox result --artifact report.md` inscrit fichier, dossier, taille et sha256 dans le reçu. « C'est fait » dit dans un chat n'est pas une livraison, et l'outil ne laisse pas un agent l'enregistrer comme telle.
-
-**6. Tourne là où vous êtes déjà.**
-Un dépôt privé sur Gitee, un dossier WebDAV Nutstore, un VPS en SSH, Google Drive, deux portables sur le même LAN. Personne n'a besoin d'un compte Google, d'un VPN, ni d'ouvrir un port entrant.
-
-**7. Zéro dépendance.**
-Bibliothèque standard Python uniquement, Python 3.9+, une commande. Rien à compiler, pas de lockfile, pas de chaîne d'approvisionnement à auditer.
+**5. Zéro dépendance.**
+Bibliothèque standard Python uniquement, 3.9+. Rien à compiler, pas de lockfile, pas de chaîne d'approvisionnement à auditer.
 
 ## Installation
 
