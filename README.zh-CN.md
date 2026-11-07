@@ -1,6 +1,6 @@
 # PostBox-M
 
-**给 Agent 一个共享文件夹，基础设施就这么多。**
+**人在外面，也能给另一台电脑派活。**
 
 [![test](https://github.com/lx67621956-create/PostBox-M/actions/workflows/test.yml/badge.svg)](https://github.com/lx67621956-create/PostBox-M/actions/workflows/test.yml)
 [![release](https://img.shields.io/github/v/release/lx67621956-create/PostBox-M)](https://github.com/lx67621956-create/PostBox-M/releases)
@@ -15,7 +15,9 @@
 
 <sub>`postbox serve` —— 只读，跑在你自己机器上，读的就是那个你已经在共享的文件夹。不要账号、不要数据库、不用部署。</sub>
 
-几台互相连不上的机器，几个各自为战的 AI Agent，共用一条任务队列。不要消息中间件、不要服务器、不要数据库、不要账号、不用翻墙。只要你的 Agent 能读能写一个文件夹——Google Drive、私有 git 仓库、Syncthing 同步目录、一个 U 盘——它们就能互相派活。
+你在外面，只带着手机。跟手机上的 AI 说一句：这事交给家里那台电脑办。它就派过去了——派给另一座城市的公司电脑，派给常年开着的云服务器，派给家里那台。那台机器上的 AI 接过活，自己干，干完把东西放在本地，再交一张单子告诉你东西在哪、多大、对不对得上。
+
+中间怎么转的，你不用管。几台机器共用一个文件夹就够了：Google Drive、私有 git 仓库、Syncthing、一个 U 盘都行。不要服务器、不要数据库、不要账号、不用翻墙。
 
 ## 你到底得到了什么
 
